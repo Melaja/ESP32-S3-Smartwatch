@@ -1,0 +1,562 @@
+================================================================================
+  04 - FUNCTION DESCRIPTIONS
+  Detailed explanation of all functions in ESP32_S3_Smartwatch.ino
+================================================================================
+  Version:    2.3.1
+  Date:       1 February 2026
+  Author:     JWP van Renen
+================================================================================
+
+
+1. LVGL CALLBACKS
+================================================================================
+
+  1.1 my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
+  -------------------------------------------------------------------------------
+  Purpose:  LVGL flush callback - sends pixels to the physical display.
+  When:     Called by LVGL when a portion of the screen needs to be redrawn.
+  How:      Calls gfx->draw16bitRGBBitmap() to send pixel data to the CO5300
+            display. After drawing, lv_display_flush_ready() is called to
+            inform LVGL that the transfer is complete.
+  Params:   disp    - LVGL display object
+            area    - Rectangle to draw (x1,y1,x2,y2)
+            px_map  - Pointer to pixel data in RGB565 format
+
+  1.2 my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
+  ----------------------------------------------------------------
+  Purpose:  LVGL touch read callback - reads touch status.
+  When:     Called by LVGL via lv_timer_handler() for each input polling cycle.
+  How:      Reads touch data from FT3168 via I2C. On active touch, X,Y
+            coordinates are passed to LVGL. On release, swipe detection is
+            performed (deltaX/deltaY calculation).
+  Returns:  Fills data->point.x/y and data->state.
+  Swipe:    If deltaX > 50px and more horizontal than vertical:
+            - Positive deltaX: prevScreen() (swipe right)
+            - Negative deltaX: nextScreen() (swipe left)
+
+
+2. DISPLAY AND POWER FUNCTIONS
+================================================================================
+
+  2.1 setDisplayBrightness(uint8_t brightness)
+  ----------------------------------------------
+  Purpose:  Sets the AMOLED brightness.
+  How:      Sends MIPI DCS command (0x51) to CO5300 controller via the
+            Arduino_GFX bus interface.
+  Params:   brightness - Value 0-255 (0=off, 255=maximum)
+  Note:     Called by power saving and on slider change.
+
+  2.2 registerActivity()
+  ----------------------
+  Purpose:  Registers user activity for power saving.
+  How:      Sets lastActivityTime to millis(). If display is in sleep
+            or dimmed mode, it is immediately restored to full brightness
+            (NORMAL_BRIGHTNESS = 200).
+  When:     On every touch, at start of PNG loading, and in the viewer.
+
+  2.3 updatePowerSaving()
+  ------------------------
+  Purpose:  Manages the 3-step power saving (active->dimmed->sleep).
+  How:      Calculates inactive time (millis() - lastActivityTime).
+            At > DIM_TIMEOUT (15s): dim to DIM_BRIGHTNESS (50).
+            At > SLEEP_TIMEOUT (30s): sleep (brightness 0).
+  Timing:   Called every loop() iteration (~200x per second).
+
+  Constants:
+    NORMAL_BRIGHTNESS = 200     Normal brightness
+    DIM_BRIGHTNESS    = 50      Dimmed brightness
+    DIM_TIMEOUT       = 15000   15 seconds until dimming
+    SLEEP_TIMEOUT     = 30000   30 seconds until sleep
+
+
+3. WIFI AND NTP FUNCTIONS
+================================================================================
+
+  3.1 connectToWiFi()
+  --------------------
+  Purpose:  Connects to the configured WiFi network.
+  How:      Uses WiFi.begin(SSID, PASSWORD) from wifi_config.h.
+            Waits maximum 20 seconds for connection (polled every 500ms).
+            Prints IP address on success.
+  Returns:  void (wifiConnected is set internally)
+
+  3.2 initTime()
+  ---------------
+  Purpose:  Synchronizes time via NTP and configures timezone.
+  How:      configTzTime(TZ_INFO, NTP_SERVER) sets timezone and NTP server.
+            Waits maximum 10 seconds for sync.
+  Timezone: CET-1CEST,M3.5.0,M10.5.0/3
+            = CET (UTC+1) in winter
+            = CEST (UTC+2) in summer (March-October)
+  Server:   be.pool.ntp.org (configurable)
+
+  3.3 checkNtpSync()
+  -------------------
+  Purpose:  Periodic check whether NTP resync is needed.
+  How:      Every 60 seconds checks if the time is valid.
+            With invalid time (year < 2024): attempts to resynchronize
+            if WiFi is connected.
+
+
+4. IMU AND STEP COUNTER FUNCTIONS
+================================================================================
+
+  4.1 initIMU()
+  --------------
+  Purpose:  Initializes the QMI8658 6-axis IMU.
+  How:      Configures accelerometer via I2C.
+            Sets sample rate and sensitivity.
+  Returns:  true if QMI8658 found and configured.
+
+  4.2 readAccelerometer()
+  ------------------------
+  Purpose:  Reads X, Y, Z acceleration values from QMI8658.
+  How:      I2C register reads from accelerometer data registers.
+            Values are stored in global variables.
+  Timing:   Called every 20ms (50 Hz sample rate).
+
+  4.3 detectStep()
+  -----------------
+  Purpose:  Detects steps based on accelerometer data.
+  How:      Peak-valley detection algorithm:
+            1. Calculate magnitude: sqrt(x^2 + y^2 + z^2)
+            2. Low-pass filter for smoothing
+            3. Detect peaks (local maxima)
+            4. Detect valleys (local minima)
+            5. Step = peak + valley with sufficient amplitude difference
+  Output:   Increments stepCount global variable on detection.
+
+  4.4 updateStepDisplay()
+  ------------------------
+  Purpose:  Updates the step counter display.
+  How:      Updates ui_steps_count label with current stepCount.
+            Updates ui_steps_status with "Actief" or "Gepauzeerd".
+  Timing:   Every 500ms or immediately on new step detection.
+
+
+5. DISPLAY UPDATE FUNCTIONS
+================================================================================
+
+  5.1 updateTimeDisplay(int hours, int minutes, int seconds)
+  -----------------------------------------------------------
+  Purpose:  Updates the time display on the clock screen.
+  How:      Compares new time with previous value (static buffers).
+            Updates ONLY on change to prevent unnecessary LVGL redraws.
+            Format: "HH:MM" and "SS".
+  Optim.:   1 update per second (for seconds), 1 per minute (for time).
+
+  5.2 updateDateDisplay(int day, int month, int year, int weekday)
+  -----------------------------------------------------------------
+  Purpose:  Updates date and day name on the clock screen.
+  How:      Format: "17 Januari 2026" and "Vrijdag" (Dutch).
+            Uses maandNamen[] and dagNamen[] arrays.
+            Updates only on change (normally once per day).
+  Params:   month = 0-11 (C standard tm_mon)
+            weekday = 0-6 (0=Sunday, tm_wday)
+
+  5.3 updateBatteryLevel(int percentage)
+  ----------------------------------------
+  Purpose:  Updates battery percentage and color.
+  How:      Shows "XX%" with color coding:
+            >50% = green, 20-50% = yellow, <20% = red.
+  Timing:   Every 30 seconds.
+
+  5.4 updateWiFiStatus(bool connected)
+  --------------------------------------
+  Purpose:  Shows WiFi connection status.
+  How:      "Verbonden" (cyan) or "Geen" (red).
+  Timing:   Every second (but updates only on change).
+
+
+6. SCREEN NAVIGATION FUNCTIONS
+================================================================================
+
+  6.1 nextScreen()
+  -----------------
+  Purpose:  Navigates to the next screen.
+  How:      currentScreen = (currentScreen + 1) % 4
+            Loads the corresponding screen with slide-left animation.
+            On screen 3 (files): also calls populateFileList().
+  Animation: LV_SCR_LOAD_ANIM_MOVE_LEFT, 300ms, no delay.
+
+  6.2 prevScreen()
+  -----------------
+  Purpose:  Navigates to the previous screen.
+  How:      currentScreen = (currentScreen + 3) % 4
+            Mathematically equivalent to -1 but without negative numbers.
+  Animation: LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300ms.
+
+
+7. SD CARD FUNCTIONS
+================================================================================
+
+  7.1 initSDCard()
+  -----------------
+  Purpose:  Initializes the MicroSD card via HSPI bus.
+  How:      sdSPI.begin() configures the SPI pins.
+            SD.begin() mounts the card at 20 MHz.
+            Prints card type (MMC/SDSC/SDHC) and size.
+  Returns:  true if SD card successfully mounted.
+
+  7.2 listSDFiles(const char *dirname, uint8_t levels)
+  -----------------------------------------------------
+  Purpose:  Prints file list to Serial Monitor.
+  How:      Opens directory, iterates all files/folders.
+            Recursive if levels > 0.
+  Usage:    Only at boot for debug output.
+
+
+8. IMAGE DISPLAY FUNCTIONS
+================================================================================
+
+  8.1 jpegDrawCallback(int16_t x, y, uint16_t w, h, uint16_t *bitmap)
+  --------------------------------------------------------------------
+  Purpose:  TJpg_Decoder callback for JPEG blocks.
+  How:      Draws each decoded block (MCU) to the display.
+            Applies imageXOffset/imageYOffset for centering.
+            Checks screen bounds for clipping.
+  Returns:  true to continue decoding.
+
+  8.2 showJpegFromSD(const char *filename, bool centerX, bool centerY)
+  ---------------------------------------------------------------------
+  Purpose:  Shows a JPEG from SD card on the display.
+  How:      1. Get dimensions without decoding
+            2. Determine optimal scale factor (1, 2, 4 or 8)
+            3. Calculate centering offset
+            4. Decode and draw via callback
+  Scaling:  Automatic (smallest scale that fits within screen).
+  Error:    Detects progressive JPEG and CMYK (not supported).
+
+  8.3 pngDrawCallback(PNGDRAW *pDraw)
+  ------------------------------------
+  Purpose:  PNGdec callback for PNG rows.
+  How:      Two modes:
+            A) PSRAM buffer mode (if pngPsramBuffer != nullptr):
+               Copies row to PSRAM buffer with memcpy().
+            B) Direct mode (fallback):
+               Draws row directly with draw16bitRGBBitmap(h=1).
+               DOES NOT WORK on CO5300 QSPI!
+  Endian:   PNG_RGB565_LITTLE_ENDIAN (native ESP32).
+
+  8.4 showPngFromSD(const char *filename, bool centerX, bool centerY)
+  --------------------------------------------------------------------
+  Purpose:  Shows a PNG centered on the display.
+  How:      1. Open PNG, get dimensions
+            2. Calculate centering offset
+            3. Fill screen black
+            4. Allocate PSRAM buffer (w * h * 2 bytes)
+            5. Decode PNG (callback fills buffer)
+            6. Draw complete buffer in one call
+            7. Free PSRAM buffer
+
+  8.5 drawPngAtXY(const char *sdPath, int16_t x, int16_t y)
+  -----------------------------------------------------------
+  Purpose:  Draws PNG at a specific position (without clearing screen).
+  How:      Identical to showPngFromSD but:
+            - Does NOT fill screen black
+            - Uses specified X,Y as offset
+            - Ideal for UI elements (buttons, background)
+  Usage:    Audio player background and buttons.
+
+  8.6 showImageFromSD(const char *filename, bool centerX, bool centerY)
+  ----------------------------------------------------------------------
+  Purpose:  Automatic format detection and display.
+  How:      Determines format based on extension and calls the
+            appropriate function:
+            .jpg/.jpeg -> showJpegFromSD()
+            .png       -> showPngFromSD()
+            .gif       -> showGifFromSD()
+            .bmp       -> showBmpFromSD()
+            .pcx       -> Error message (not supported)
+
+  8.7 showBmpFromSD(const char *filename, bool centerX, bool centerY)
+  --------------------------------------------------------------------
+  Purpose:  Shows a BMP image from SD card.
+  How:      Reads BMP header (54 bytes), validates signature ('BM').
+            Only 24-bit BMP supported.
+            Draws bottom-up (BMP standard) pixel by pixel.
+            Converts RGB888 to RGB565 for display.
+  Limitation: Slow due to pixel-by-pixel rendering.
+
+  8.8 showGifFromSD(const char *filename, bool centerX, bool centerY)
+  --------------------------------------------------------------------
+  Purpose:  Placeholder for GIF display.
+  How:      Uses Arduino_Canvas (offscreen framebuffer) to render
+            "GIF" text, filename and message "Animation not supported".
+            Canvas->flush() sends the result via draw16bitRGBBitmap()
+            to the display.
+  Status:   Placeholder only, animation not yet implemented.
+
+
+9. TEXT VIEWER FUNCTIONS
+================================================================================
+
+  9.1 freeTextLines()
+  --------------------
+  Purpose:  Frees the memory of loaded text lines.
+  How:      Deletes textFileLines[] array (delete[]).
+            Resets all text scroll variables:
+            textTotalLines, textScrollLine, textScrollCol, textMaxCol.
+  When:     At exitFileViewer() and when loading a new text file.
+
+  9.2 renderTextPage()
+  ----------------------
+  Purpose:  Renders the current page of the loaded text file.
+  How:      Uses Arduino_Canvas (offscreen framebuffer):
+            1. Calculate visible lines (textLinesPerPage)
+            2. Clamp textScrollLine and textScrollCol
+            3. Draw header (filename in cyan, separator line)
+            4. Draw text lines with horizontal offset (textScrollCol)
+            5. Draw footer with page info and scroll indicators:
+               - ^ v (yellow): vertical scroll available
+               - < > (cyan): horizontal scroll available
+            6. canvas->flush() sends result to display
+  Font:     setTextSize(2) = 10x14 pixels per character
+  Layout:   Header 40px, content area, footer 28px
+
+  9.3 showTextFromSD(const char *filename)
+  ------------------------------------------
+  Purpose:  Loads a text file into memory and shows the first page.
+  How:      1. freeTextLines() - clear previous data
+            2. Open file from SD card
+            3. Read all lines into textFileLines[] array (PSRAM)
+               - Max 500 lines (TEXT_MAX_LINES)
+               - Max 200 characters per line (TEXT_MAX_LINE_LEN)
+            4. Calculate textMaxCol (longest line)
+            5. Reset scroll positions to 0
+            6. Call renderTextPage() for display
+  Scroll:   After loading, user can scroll vertically and horizontally
+            via swipe gestures in handleViewerTouch().
+
+  9.4 showErrorFile()
+  --------------------
+  Purpose:  Shows an error message when a file cannot be opened.
+  How:      Uses Arduino_Canvas to render error text on black background.
+            Canvas->flush() sends the result to the display.
+
+
+10. AUDIO PLAYER FUNCTIONS
+================================================================================
+
+  10.1 es8311WriteReg(uint8_t reg, uint8_t val)
+  es8311ReadReg(uint8_t reg)
+  -----------------------------------------------
+  Purpose:  I2C register write/read for ES8311 codec.
+  How:      Standard I2C transmission to address 0x18.
+
+  10.2 initES8311()
+  -----------------
+  Purpose:  Complete initialization of the ES8311 audio codec.
+  How:      7-step process:
+            1. Software reset
+            2. Clock configuration (MCLK external)
+            3. I2S format (standard I2S, 16-bit)
+            4. Power up (reference + analog + IBIAS)
+            5. ADC configuration (microphone)
+            6. DAC configuration (unmute, max volume)
+            7. Output configuration (+24dB gain, speaker enable)
+  Verify:   Reads back registers and prints to Serial.
+
+  10.3 initAudio()
+  -----------------
+  Purpose:  Initializes the complete audio subsystem.
+  How:      1. PA_CTRL -> LOW (amplifier off at boot)
+            2. Start MCLK via LEDC (11.29 MHz on GPIO16)
+            3. Initialize ES8311 codec
+            4. Configure I2S pins
+            5. Set default volume (21/21 = max)
+  Returns:  true if audio is available.
+
+  10.4 setAudioVolume(uint8_t volume)
+  ------------------------------------
+  Purpose:  Sets audio volume.
+  How:      Clamps to 0-21 range, calls audio.setVolume().
+
+  10.5 startAudioPlayback(const char *filename)
+  -----------------------------------------------
+  Purpose:  Starts audio playback from SD card.
+  How:      1. Stop any current playback
+            2. PA_CTRL -> HIGH (amplifier on)
+            3. Wait 100ms (stabilization)
+            4. audio.connecttoFS(SD, filename)
+            5. audioPlaying = true
+  Error:    If file not found or connecttoFS fails:
+            PA_CTRL -> LOW, audioPlaying = false.
+
+  10.6 stopAudioPlayback()
+  -------------------------
+  Purpose:  Stops audio playback.
+  How:      audio.stopSong(), PA_CTRL -> LOW.
+            Resets audioPlaying and audioPaused.
+
+  10.7 toggleAudioPlayback()
+  ---------------------------
+  Purpose:  Toggles between pause and playback.
+  How:      audio.pauseResume(), toggle audioPaused.
+            Redraws play/pause button.
+
+  10.8 audioLoop()
+  ----------------
+  Purpose:  Must be called every loop() iteration.
+  How:      Calls audio.loop() when audio is active.
+            This keeps the audio streaming running.
+
+  10.9 showAudioPlayer(const char *filename)
+  -------------------------------------------
+  Purpose:  Shows the complete audio player interface.
+  How:      7 steps:
+            1. Load background PNG (BG_Watch_Audio.png)
+            2. Song title (filename without extension)
+            3. "NOW PLAYING" subtitle
+            4. Control buttons (PNG images from SD)
+            5. Volume bar
+            6. Help text
+            7. Start audio playback
+  Timing:   Multiple registerActivity() calls to prevent display
+            dimming during PNG file loading.
+
+  10.10 drawControlButtons(bool isPlaying)
+  -----------------------------------------
+  Purpose:  Draws the 4 audio control buttons.
+  How:      Loads PNG images from SD card:
+            - /images/button_prev_75.png
+            - /images/button_play_75.png OR button_pause_75.png
+            - /images/button_next_75.png
+            - /images/button_repeat_75.png
+  Fallback: If PNG not found: draws colored circles.
+  Layout:   4 buttons in a row, y=360, step=90px, start x=32.
+
+  10.11 drawVolumeBar(uint8_t volume)
+  ------------------------------------
+  Purpose:  Draws the volume bar.
+  How:      Background bar (dark grey) + filled portion (green).
+            "-" left and "+" right of the bar.
+            Volume percentage text below.
+  Position: y=450, width=260, centered.
+  Range:    0-21 (audio library range).
+
+  10.12 handleAudioTap(int16_t x, int16_t y)
+  -------------------------------------------
+  Purpose:  Processes tap on audio player buttons.
+  How:      Checks if (x,y) falls within one of the button areas.
+            Buttons:
+            - Previous (x=22..117, y=350..445): showPrevFile()
+            - Play/Pause (x=112..207): toggleAudioPlayback()
+            - Next (x=202..297): showNextFile()
+            - Repeat (x=292..387): restart current track
+            Volume:
+            - "-" (x=35..75, y=440..475): volume - 1
+            - "+" (x=335..385, y=440..475): volume + 1
+  Margin:   10px extra around each button (hitMargin).
+
+
+11. FILE BROWSER FUNCTIONS
+================================================================================
+
+  11.1 getFileTypeEnum(const char *filename)
+  -------------------------------------------
+  Purpose:  Determines FileType enum based on extension.
+  Returns:  FILE_TYPE_IMAGE, FILE_TYPE_TEXT, FILE_TYPE_AUDIO,
+            or FILE_TYPE_NONE.
+
+  11.2 buildFileListByType(FileType targetType)
+  -----------------------------------------------
+  Purpose:  Builds array of files of the same type.
+  How:      Iterates currentDirectory, adds files with matching type
+            to fileList[] array (max 64).
+            Finds current file in list (currentFileIndex).
+
+  11.3 populateFileList()
+  ------------------------
+  Purpose:  Fills the LVGL file list with items.
+  How:      3 phases:
+            1. ".." button (if not in root)
+            2. Subdirectories (blue, folder icon)
+            3. Files (color per type, appropriate icon)
+  Style:    Montserrat 18pt font, dark background, 12px padding.
+  Memory:   File paths are copied with malloc() and stored as
+            user data on the LVGL button.
+
+  11.4 ui_event_file_clicked(lv_event_t *e)
+  -------------------------------------------
+  Purpose:  Event handler when user taps on a file.
+  How:      Gets file path from button user data.
+            Determines type, builds navigation list.
+            Sets pendingViewerOpen = true for deferred rendering.
+  CRITICAL: Does NOT draw directly! Rendering is deferred until
+            after lv_timer_handler() in the main loop.
+
+  11.5 ui_event_folder_clicked(lv_event_t *e)
+  ---------------------------------------------
+  Purpose:  Event handler for folder navigation.
+  How:      Gets folder path, calls navigateToFolder().
+
+  11.6 navigateToFolder(const char *folderPath)
+  -----------------------------------------------
+  Purpose:  Navigates to the specified folder.
+  How:      Updates currentDirectory, calls populateFileList().
+
+  11.7 exitFileViewer()
+  ----------------------
+  Purpose:  Exits viewer mode, back to files screen.
+  How:      Stops audio, calls freeTextLines() to free text viewer
+            memory, resets ALL touch state variables, loads
+            ui_ScreenFiles, forces lv_timer_handler().
+  CRITICAL: Clears FT3168->IIC_Interrupt_Flag to prevent ghost touches.
+
+  11.8 handleViewerTouch()
+  -------------------------
+  Purpose:  Processes touch input in viewer mode.
+  How:      4-phase system (see section 6 in Software Architecture).
+            Swipe behavior differs per viewer type:
+            - Text: vertical = scroll lines (half page),
+                    horizontal = scroll columns (10 chars)
+            - Image: vertical = next/previous file
+            - Audio: horizontal = volume (+/- 3 steps)
+
+  11.9 showNextFile() / showPrevFile()
+  --------------------------------------
+  Purpose:  Shows next/previous file of the same type.
+  How:      Updates currentFileIndex (cyclic), loads file.
+            Resets touch debounce timer after loading.
+
+
+12. TOUCH INITIALIZATION
+================================================================================
+
+  12.1 initTouch()
+  -----------------
+  Purpose:  Initializes FT3168 capacitive touch controller.
+  How:      FT3168->begin() searches for device on I2C bus.
+            Configures TOUCH_POWER_MONITOR mode for low power
+            consumption with interrupt-based wake.
+  Returns:  true if FT3168 found.
+
+
+13. AUDIO LIBRARY CALLBACKS
+================================================================================
+
+  13.1 audio_info(const char *info)
+  ----------------------------------
+  Purpose:  Debug callback from ESP32-audioI2S library.
+  How:      Prints info to Serial with "[Audio-Lib]" prefix.
+
+  13.2 audio_error(const char *info)
+  -----------------------------------
+  Purpose:  Error callback.
+  How:      Prints error to Serial.
+
+  13.3 audio_eof_mp3(const char *info)
+  --------------------------------------
+  Purpose:  Callback when audio file has been fully played.
+  How:      Sets audioPlaying = false, PA_CTRL -> LOW.
+
+  13.4 audio_id3data(const char *info)
+  --------------------------------------
+  Purpose:  Callback for ID3 metadata (MP3 tags).
+  How:      Prints metadata to Serial.
+
+
+================================================================================
+  End of document: 04 - FUNCTION DESCRIPTIONS
+================================================================================

@@ -1,0 +1,306 @@
+================================================================================
+  06 - INSTALLATION AND COMPILATION GUIDE
+  Step-by-step instructions for compilation and upload
+================================================================================
+  Version:    2.3.1
+  Date:       1 February 2026
+  Author:     JWP van Renen
+================================================================================
+
+
+1. REQUIREMENTS
+================================================================================
+
+  Software:
+  - Arduino IDE 2.x (or 1.8.x)
+  - ESP32 Arduino Core (via Board Manager)
+  - USB driver for ESP32-S3 (CH340 or native USB CDC)
+
+  Hardware:
+  - Waveshare ESP32-S3 Touch AMOLED 2.06"
+  - USB-C cable (data, not charge-only)
+  - MicroSD card (optional, for files/audio)
+  - Computer with Windows/Mac/Linux
+
+
+2. STEP 1: INSTALL ARDUINO IDE
+================================================================================
+
+  2.1 Download Arduino IDE:
+      https://www.arduino.cc/en/software
+
+  2.2 Install ESP32 Board Support:
+      a) Open Arduino IDE
+      b) Go to File > Preferences
+      c) At "Additional Board Manager URLs" add:
+         https://espressif.github.io/arduino-esp32/package_esp32_index.json
+      d) Go to Tools > Board > Board Manager
+      e) Search "esp32" and install "esp32 by Espressif Systems"
+
+
+3. STEP 2: INSTALL LIBRARIES
+================================================================================
+
+  There are two methods:
+
+  === METHOD A: From the export folder (recommended) ===
+
+  1. Copy ALL folders from:
+     c:\export\smartwatch\ESP32_S3_Smartwatch\libraries\
+     to your Arduino libraries folder:
+     C:\Users\<username>\Documents\Arduino\libraries\
+
+  2. Also copy lv_conf.h to:
+     C:\Users\<username>\Documents\Arduino\libraries\lv_conf.h
+
+  After copying, your libraries folder should look like this:
+
+     Arduino/libraries/
+     |-- lv_conf.h              <-- CRITICAL: must be NEXT TO lvgl/
+     |-- lvgl/
+     |-- GFX_Library_for_Arduino/
+     |-- Arduino_DriveBus/
+     |-- XPowersLib/
+     |-- ESP32-audioI2S-master/
+     |-- AnimatedGIF/
+     |-- PNGdec/
+     |-- TJpg_Decoder/
+
+
+  === METHOD B: Via Arduino Library Manager + manual ===
+
+  Via Library Manager (Sketch > Include Library > Manage Libraries):
+  - lvgl version 9.3.0
+  - GFX Library for Arduino version 1.6.4
+  - XPowersLib version 0.3.2
+  - AnimatedGIF version 2.2.0
+  - PNGdec version 1.1.6
+  - TJpg_Decoder version 1.1.0
+
+  Manual installation (not in Library Manager):
+  - Arduino_DriveBus (v1.0.1) - from Waveshare SDK
+  - ESP32-audioI2S-master (v3.4.4) - from GitHub
+
+  IMPORTANT: With method B you must manually copy lv_conf.h
+  to the Arduino/libraries/ folder!
+
+
+4. STEP 3: BOARD SETTINGS
+================================================================================
+
+  Go to Tools menu and configure:
+
+  Setting                     Value
+  --------------------------- -------------------------------------------
+  Board                       ESP32S3 Dev Module
+  USB CDC On Boot              Enabled (*)
+  USB DFU On Boot              Disabled
+  Flash Mode                   QIO 80MHz
+  Flash Size                   16MB (128Mb)
+  Partition Scheme              app3M_fat9M_16MB (**)
+  PSRAM                        OPI PSRAM
+  CPU Frequency                240MHz (WiFi)
+  Upload Speed                 921600
+  USB Mode                     Hardware CDC and JTAG
+
+  (*) USB CDC On Boot = Enabled is CRITICAL!
+      Without this you will not see Serial.println() output.
+
+  (**) If app3M_fat9M_16MB is not available, choose:
+       "Huge APP (3MB No OTA/1MB SPIFFS)" or
+       "Default 16MB with spiffs"
+
+  FQBN (for arduino-cli):
+  esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,
+  PartitionScheme=app3M_fat9M_16MB,PSRAM=opi
+
+
+5. STEP 4: OPEN PROJECT
+================================================================================
+
+  1. Open Arduino IDE
+  2. File > Open
+  3. Navigate to:
+     c:\export\smartwatch\ESP32_S3_Smartwatch\ESP32_S3_Smartwatch.ino
+  4. Arduino IDE automatically opens all associated files
+     (.h, .cpp) in tabs
+
+  You should see the following tabs:
+  - ESP32_S3_Smartwatch
+  - pin_config.h
+  - wifi_config.h
+  - ui.h / ui.cpp
+  - ui_events.h / ui_events.cpp
+  - ui_helpers.h / ui_helpers.cpp
+  - ui_ScreenClock / Steps / Settings / Files
+
+
+6. STEP 5: CONFIGURE WIFI SETTINGS
+================================================================================
+
+  Open wifi_config.h and modify:
+
+    const char *WIFI_SSID     = "YourNetwork";
+    const char *WIFI_PASSWORD = "YourPassword";
+    const char *NTP_SERVER    = "pool.ntp.org";
+    const char *TZ_INFO       = "CET-1CEST,M3.5.0,M10.5.0/3";
+
+  Timezone examples:
+  - Netherlands/Belgium:  "CET-1CEST,M3.5.0,M10.5.0/3"
+  - UK:                   "GMT0BST,M3.5.0/1,M10.5.0"
+  - US Eastern:           "EST5EDT,M3.2.0,M11.1.0"
+  - US Pacific:           "PST8PDT,M3.2.0,M11.1.0"
+
+
+7. STEP 6: COMPILE
+================================================================================
+
+  1. Click the checkmark (Verify) or Ctrl+R
+  2. Wait for compilation (~1-2 minutes on first build)
+  3. Check for errors at the bottom
+
+  Expected output:
+    Sketch uses XXXXX bytes (XX%) of program storage space.
+    Global variables use XXXXX bytes (XX%) of dynamic memory.
+
+  Expected size: ~2.5 MB firmware
+
+  Possible errors:
+  -----------------
+  ERROR: "lvgl.h: No such file or directory"
+  SOLUTION: lvgl library not installed or lv_conf.h is missing.
+
+  ERROR: "Arduino_GFX_Library.h: No such file or directory"
+  SOLUTION: GFX library not installed.
+
+  ERROR: "lv_conf.h: No such file or directory"
+  SOLUTION: lv_conf.h must be NEXT TO the lvgl/ folder in libraries/.
+
+  ERROR: "Permission denied" on header files
+  SOLUTION: Close other IDE instances, wait a moment, try again.
+
+
+8. STEP 7: UPLOAD
+================================================================================
+
+  1. Connect the Waveshare board via USB-C
+  2. Select the correct COM port (Tools > Port)
+  3. Click the arrow (Upload) or Ctrl+U
+  4. Wait for upload (~15-20 seconds at 921600 baud)
+
+  Expected upload output:
+    Connecting...
+    Writing at 0x00010000... 100%
+    Wrote 2508992 bytes in 17.0 seconds
+    Hard resetting via RTS pin...
+
+  If upload fails:
+  -----------------
+  - Briefly press the BOOT button while starting upload
+  - Verify the correct COM port is selected
+  - Try a lower Upload Speed (115200)
+  - Verify the USB cable supports data (not charge-only)
+  - After upload a different COM port may appear (CDC port)
+
+
+9. STEP 8: SERIAL MONITOR
+================================================================================
+
+  1. Open Serial Monitor: Tools > Serial Monitor (or Ctrl+Shift+M)
+  2. Set baud rate to 115200
+  3. You should see:
+
+    ==================================================
+    ESP32-S3 Smartwatch LVGL - Versie 2.3.1
+    Auteur: JWP van Renen
+    ==================================================
+    [I2C] Bus initialiseren...
+    [I2C] OK
+    [PMU] AXP2101 OK
+    [Display] CO5300 OK
+    [Touch] FT3168 OK
+    [IMU] QMI8658 OK
+    [SD] MicroSD kaart OK
+    [Audio] ES8311 geinitialiseerd
+    [WiFi] Verbonden met ReLo
+    [NTP] Tijd gesynchroniseerd
+    ==================================================
+    Initialisatie compleet!
+    ==================================================
+
+
+10. STEP 9: PREPARE SD CARD
+================================================================================
+
+  For the audio player and image viewer:
+
+  1. Format MicroSD card as FAT32
+  2. Create an /images/ folder
+  3. Copy the following files to /images/:
+     - BG_Watch_Audio.png
+     - button_play_75.png
+     - button_pause_75.png
+     - button_prev_75.png
+     - button_next_75.png
+     - button_repeat_75.png
+
+  4. Optional: add your own files:
+     - Music: MP3, WAV, OGG or FLAC files
+     - Photos: JPG or PNG files
+     - Text: TXT files
+
+
+11. COMPILATION VIA COMMAND LINE (arduino-cli)
+================================================================================
+
+  As an alternative to the IDE you can use arduino-cli:
+
+  Path to arduino-cli (with Arduino IDE installation):
+  "C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+
+  Compile:
+  arduino-cli compile --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi "c:\export\smartwatch\ESP32_S3_Smartwatch"
+
+  Upload:
+  arduino-cli upload -p COM12 --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi "c:\export\smartwatch\ESP32_S3_Smartwatch"
+
+
+12. TROUBLESHOOTING
+================================================================================
+
+  Problem: Display stays black
+  Solution: Check QSPI pins in pin_config.h.
+            Check if gfx->begin() is successful in Serial Monitor.
+
+  Problem: Touch does not work
+  Solution: Check I2C connection.
+            FT3168 must respond at address 0x38.
+
+  Problem: No sound
+  Solution: Check ES8311 on I2C (address 0x18).
+            Check PA_CTRL pin (GPIO46).
+            Check if MCLK is active (GPIO16, 11.29 MHz).
+            Check SD card for audio files.
+
+  Problem: PNG images not visible
+  Solution: This was fixed in v2.3.0 with PSRAM buffering.
+            Verify PSRAM is correctly configured (OPI PSRAM).
+            Check Serial Monitor for "[IMG]" messages.
+
+  Problem: "Guru Meditation Error" crash
+  Solution: Usually memory related.
+            Check PSRAM availability with ESP.getFreePsram().
+            Reduce LVGL buffer if PSRAM is not available.
+
+  Problem: WiFi does not connect
+  Solution: Check SSID and password in wifi_config.h.
+            WiFi only works on 2.4 GHz (not 5 GHz).
+
+  Problem: Time is incorrect
+  Solution: Check timezone setting in wifi_config.h.
+            NTP requires a working WiFi connection.
+
+
+================================================================================
+  End of document: 06 - INSTALLATION AND COMPILATION GUIDE
+================================================================================

@@ -1,0 +1,374 @@
+================================================================================
+  05 - LIBRARIES AND DEPENDENCIES
+  All required libraries and their role in the project
+================================================================================
+  Version:    2.3.1
+  Date:       1 February 2026
+  Author:     JWP van Renen
+================================================================================
+
+
+1. OVERVIEW
+================================================================================
+
+The project uses 8 third-party libraries, 5 built-in Arduino/ESP32
+libraries, and 1 configuration file (lv_conf.h).
+
+  Type                      Count
+  ------------------------- ------
+  Third-party libraries     8
+  Built-in libraries        5
+  Configuration files       1
+  Local source files        13
+
+
+2. THIRD-PARTY LIBRARIES (must be installed)
+================================================================================
+
+  2.1 LVGL - Light and Versatile Graphics Library
+  -------------------------------------------------
+  Version:      9.3.0
+  Author:       Gabor Kiss-Vamosi (kisvegabor)
+  Include:      #include "lvgl.h"
+  Files:        ~4100 files
+  Size:         ~159 MB (including examples and documentation)
+
+  Role in project:
+  LVGL is the heart of the graphical interface. It manages all 4
+  main screens (clock, steps, settings, files) including:
+  - Widget rendering (labels, buttons, sliders, lists)
+  - Touch input processing
+  - Screen transitions with animations
+  - Automatic layout and scrolling
+  - Custom fonts
+
+  Configuration:
+  LVGL requires a configuration file (lv_conf.h) that must be placed
+  OUTSIDE the lvgl library folder. This file determines:
+  - Color depth (16-bit RGB565)
+  - Memory allocation settings
+  - Enabled features (fonts, widgets, animations)
+  - Custom font declarations
+
+  IMPORTANT: lv_conf.h must be in the same folder as the lvgl/
+  folder (not inside it!).
+
+  Installation:
+  - Arduino Library Manager: search "lvgl" version 9.3.0
+  - OR: copy lvgl/ folder to Arduino/libraries/
+  - Copy lv_conf.h to Arduino/libraries/ (NEXT TO lvgl/)
+
+
+  2.2 GFX Library for Arduino (Arduino_GFX_Library)
+  ---------------------------------------------------
+  Version:      1.6.4
+  Author:       Moon On Our Nation
+  Include:      #include "Arduino_GFX_Library.h"
+  Files:        ~321 files
+  Size:         ~28 MB
+
+  Role in project:
+  Display driver for the CO5300 AMOLED display. Provides:
+  - QSPI bus configuration and communication
+  - CO5300 controller initialization
+  - Pixel rendering functions:
+    * draw16bitRGBBitmap() - main function for pixel data
+    * fillScreen() - fill screen with color
+    * fillRect(), drawCircle(), fillTriangle() - primitives
+    * drawPixel() - single pixel
+    * setCursor(), print() - text rendering
+  - Brightness control via MIPI DCS commands
+
+  Display instance (from .ino):
+    Arduino_DataBus *bus = new Arduino_ESP32QSPI(
+        LCD_CS, LCD_SCLK, LCD_SDIO0, LCD_SDIO1, LCD_SDIO2, LCD_SDIO3);
+    Arduino_GFX *gfx = new Arduino_CO5300(bus, LCD_RESET, ...);
+
+  Installation:
+  - Arduino Library Manager: search "GFX Library for Arduino"
+  - OR: copy GFX_Library_for_Arduino/ to Arduino/libraries/
+
+
+  2.3 Arduino_DriveBus_Library
+  -----------------------------
+  Version:      1.0.1
+  Author:       Xk_w
+  Include:      #include "Arduino_DriveBus_Library.h"
+  Files:        ~22 files
+  Size:         ~215 KB
+
+  Role in project:
+  Hardware abstraction layer for I2C devices. Provides:
+  - FT3168 touch controller driver
+  - I2C communication wrapper
+  - Interrupt-based touch detection
+  - Touch data reading (coordinates, number of fingers)
+  - Power mode configuration
+
+  Touch instance:
+    std::shared_ptr<Arduino_IIC> FT3168(new Arduino_FT3168(...));
+
+  Installation:
+  - NOT available via Library Manager
+  - Manual: copy Arduino_DriveBus/ to Arduino/libraries/
+  - Source: Waveshare SDK
+
+
+  2.4 XPowersLib
+  ----------------
+  Version:      0.3.2
+  Author:       Lewis He
+  Include:      #include "XPowersLib.h"
+  Files:        ~76 files
+  Size:         ~6.5 MB
+
+  Role in project:
+  Driver for the AXP2101 Power Management IC. Provides:
+  - Battery percentage reading
+  - Battery voltage measurement
+  - Battery detection (present/absent)
+  - Interrupt configuration (not used)
+  - Charge status monitoring
+
+  PMU instance:
+    XPowersPMU power;
+    power.begin(Wire, AXP2101_SLAVE_ADDRESS, IIC_SDA, IIC_SCL);
+
+  Installation:
+  - Arduino Library Manager: search "XPowersLib"
+  - OR: copy XPowersLib/ to Arduino/libraries/
+
+
+  2.5 ESP32-audioI2S (Audio.h)
+  ------------------------------
+  Version:      3.4.4
+  Author:       schreibfaul1
+  Include:      #include "Audio.h"
+  Files:        ~108 files
+  Size:         ~30 MB
+
+  Role in project:
+  Complete audio engine for playing audio files:
+  - Supported formats: MP3, WAV, OGG, FLAC
+  - Source: SD card via connecttoFS()
+  - Output: I2S interface to ES8311 codec
+  - Volume control (0-21 steps)
+  - Pause/resume functionality
+  - Callback system (info, error, eof, id3data)
+
+  Audio instance:
+    Audio audio;
+    audio.setPinout(I2S_BCLK, I2S_LRCK, I2S_DOUT, I2S_DIN);
+    audio.connecttoFS(SD, "/music/song.mp3");
+
+  Installation:
+  - NOT available via Library Manager
+  - Manual: copy ESP32-audioI2S-master/ to Arduino/libraries/
+  - Source: https://github.com/schreibfaul1/ESP32-audioI2S
+
+
+  2.6 PNGdec
+  -----------
+  Version:      1.1.6
+  Author:       Larry Bank
+  Include:      #include "PNGdec.h"
+  Files:        ~62 files
+  Size:         ~2.7 MB
+
+  Role in project:
+  PNG image decoder. Provides:
+  - Open PNG file from SD card
+  - Line-by-line decoding via callback
+  - RGB565 output (little-endian or big-endian)
+  - Support for palette-based and true-color PNG
+  - Transparency support (alpha channel)
+
+  Usage:
+    PNG png;
+    png.open(filename, openCallback, closeCallback, readCallback, seekCallback, drawCallback);
+    png.decode(NULL, 0);
+    png.close();
+
+  Installation:
+  - Arduino Library Manager: search "PNGdec"
+  - OR: copy PNGdec/ to Arduino/libraries/
+
+
+  2.7 TJpg_Decoder
+  ------------------
+  Version:      1.1.0
+  Author:       Bodmer
+  Include:      #include "TJpg_Decoder.h"
+  Files:        ~37 files
+  Size:         ~628 KB
+
+  Role in project:
+  JPEG image decoder. Provides:
+  - JPEG decoding from SD card
+  - Block-by-block rendering via callback
+  - Scale factors: 1, 2, 4, 8
+  - Dimension query without decoding
+  - Baseline JPEG only (no Progressive or CMYK)
+
+  Usage:
+    TJpgDec.setJpgScale(1);
+    TJpgDec.setCallback(jpegDrawCallback);
+    TJpgDec.drawSdJpg(0, 0, "/photo.jpg");
+
+  Installation:
+  - Arduino Library Manager: search "TJpg_Decoder"
+  - OR: copy TJpg_Decoder/ to Arduino/libraries/
+
+
+  2.8 AnimatedGIF
+  ----------------
+  Version:      2.2.0
+  Author:       Larry Bank
+  Include:      #include "AnimatedGIF.h"
+  Files:        ~74 files
+  Size:         ~25 MB
+
+  Role in project:
+  GIF decoder library. Currently included as a placeholder only.
+  GIF animation is not yet implemented - only the first frame can
+  theoretically be displayed.
+
+  Status: Not actively used, but included and linked.
+
+  Installation:
+  - Arduino Library Manager: search "AnimatedGIF"
+  - OR: copy AnimatedGIF/ to Arduino/libraries/
+
+
+3. BUILT-IN LIBRARIES (part of Arduino/ESP32 core)
+================================================================================
+
+  3.1 Arduino.h
+  Contains all Arduino core functions (pinMode, digitalWrite, millis, etc.)
+  Automatically available.
+
+  3.2 Wire.h
+  I2C communication library. Used for:
+  - FT3168 touch controller
+  - AXP2101 PMU
+  - ES8311 audio codec
+  - QMI8658 IMU
+
+  3.3 WiFi.h
+  ESP32 WiFi library. Used for:
+  - Connecting to WiFi network
+  - Status monitoring
+
+  3.4 SPI.h
+  SPI communication library. Used for:
+  - SD card communication (HSPI bus)
+  Note: The display uses QSPI which is configured differently.
+
+  3.5 SD.h
+  SD card file system library. Provides:
+  - Opening, reading, writing files
+  - Directory navigation
+  - Card type and size information
+
+  3.6 time.h
+  C standard time library. Used for:
+  - NTP time synchronization
+  - Local time retrieval
+  - Timezone conversion
+
+  3.7 math.h
+  C standard math functions. Used for:
+  - sqrt() in step detection algorithm
+  - cos(), sin() for potential graphical calculations
+
+
+4. CONFIGURATION FILE: lv_conf.h
+================================================================================
+
+  Location:   Arduino/libraries/lv_conf.h (NEXT TO the lvgl/ folder)
+  Size:       ~49 KB
+
+  This file configures LVGL. Important settings:
+  - LV_COLOR_DEPTH = 16 (RGB565)
+  - LV_MEM_SIZE = memory pool size
+  - Enabled widgets (label, btn, slider, list, etc.)
+  - Enabled fonts
+  - Custom font declarations
+  - Animation settings
+
+  WARNING: Without this file LVGL will NOT compile.
+  The file MUST be in the correct location.
+
+
+5. LOCAL SOURCE FILES
+================================================================================
+
+  File                      Source            Description
+  ------------------------- ----------------- ----------------------------
+  ESP32_S3_Smartwatch.ino   Manual            Main program
+  pin_config.h              Waveshare SDK     GPIO pin definitions
+  wifi_config.h             Manual            WiFi/NTP configuration
+  ui.h                      SquareLine Studio LVGL UI header
+  ui.cpp                    SquareLine Studio LVGL UI implementation
+  ui_events.h               SquareLine Studio Event handler header
+  ui_events.cpp             SquareLine Studio Event handler code
+  ui_helpers.h              SquareLine Studio Helper functions header
+  ui_helpers.cpp            SquareLine Studio Helper functions code
+  ui_ScreenClock.cpp        SquareLine Studio Clock screen layout
+  ui_ScreenSteps.cpp        SquareLine Studio Steps screen layout
+  ui_ScreenSettings.cpp     SquareLine Studio Settings screen layout
+  ui_ScreenFiles.cpp        SquareLine Studio Files screen layout
+
+
+6. DEPENDENCY DIAGRAM
+================================================================================
+
+  ESP32_S3_Smartwatch.ino
+  |
+  |-- Arduino.h (core)
+  |-- math.h (standard C)
+  |-- Wire.h (I2C)
+  |   |-- FT3168 (Arduino_DriveBus_Library)
+  |   |-- AXP2101 (XPowersLib)
+  |   |-- ES8311 (manual I2C communication)
+  |   |-- QMI8658 (manual I2C communication)
+  |
+  |-- WiFi.h (ESP32 core)
+  |-- time.h (NTP)
+  |
+  |-- SPI.h -> SD.h (SD card)
+  |
+  |-- Arduino_GFX_Library.h (display driver)
+  |   |-- CO5300 QSPI display
+  |   |-- LVGL flush callback
+  |   |-- PNG/JPEG/BMP rendering
+  |
+  |-- lvgl.h (+ lv_conf.h)
+  |   |-- ui.h -> ui.cpp
+  |   |-- ui_events.h -> ui_events.cpp
+  |   |-- ui_helpers.h -> ui_helpers.cpp
+  |   |-- ui_ScreenClock.cpp
+  |   |-- ui_ScreenSteps.cpp
+  |   |-- ui_ScreenSettings.cpp
+  |   |-- ui_ScreenFiles.cpp
+  |
+  |-- TJpg_Decoder.h (JPEG decoder)
+  |-- PNGdec.h (PNG decoder)
+  |-- AnimatedGIF.h (GIF decoder, placeholder)
+  |
+  |-- Audio.h (ESP32-audioI2S)
+  |   |-- I2S interface -> ES8311 -> speaker
+  |
+  |-- Arduino_DriveBus_Library.h
+  |   |-- FT3168 touch controller
+  |
+  |-- XPowersLib.h
+  |   |-- AXP2101 PMIC
+  |
+  |-- pin_config.h (GPIO definitions)
+  |-- wifi_config.h (WiFi credentials)
+
+
+================================================================================
+  End of document: 05 - LIBRARIES AND DEPENDENCIES
+================================================================================

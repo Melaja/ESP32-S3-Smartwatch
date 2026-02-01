@@ -1,0 +1,143 @@
+================================================================================
+  01 - PROJECT OVERVIEW
+  ESP32-S3 Smartwatch with AMOLED Display
+================================================================================
+  Version:    2.3.1
+  Date:       1 February 2026
+  Author:     JWP van Renen
+  Platform:   Arduino IDE / ESP32 Arduino Core
+================================================================================
+
+
+1. WHAT IS THIS PROJECT?
+================================================================================
+
+This project is a fully functional smartwatch application built on the
+Waveshare ESP32-S3 Touch AMOLED 2.06" module. It combines a graphical
+user interface (LVGL) with direct display control (Arduino_GFX) for a
+rich multimedia experience on a compact AMOLED screen.
+
+The smartwatch provides:
+  - Digital clock with NTP time synchronization
+  - Step counter with accelerometer
+  - System settings (brightness, battery, WiFi)
+  - File browser with SD card support
+  - Multimedia viewer (images, audio, text)
+  - Power saving with automatic dimming and sleep
+
+
+2. HARDWARE PLATFORM
+================================================================================
+
+  Component               Specification
+  ----------------------- --------------------------------------------------
+  Microcontroller         ESP32-S3 (QFN56), Dual-core LX7 @ 240MHz
+  Flash Memory            16 MB (QIO mode)
+  PSRAM                   8 MB (OPI mode)
+  Display                 CO5300 AMOLED, 410x502 pixels, 16-bit RGB565
+  Display Interface       QSPI (Quad SPI)
+  Touch Controller        FT3168, capacitive, I2C @ 0x38
+  Power Management        AXP2101 PMIC, Li-Ion/Li-Po charger
+  Audio Codec             ES8311 (DAC/ADC), I2C @ 0x18
+  Audio ADC               ES7210 (microphone input)
+  Power Amplifier         External, controlled via GPIO46 (PA_CTRL)
+  IMU / Accelerometer     QMI8658 (6-axis: accelerometer + gyroscope)
+  SD Card                 MicroSD via SPI (HSPI bus)
+  Wireless                WiFi 802.11 b/g/n + Bluetooth 5.0 LE
+  USB                     USB-Serial/JTAG (CDC mode)
+
+
+3. SCREENS AND NAVIGATION
+================================================================================
+
+The application has 4 main screens plus a viewer screen:
+
+  Screen 0: CLOCK         Time, date, day name (Dutch)
+  Screen 1: STEPS         Step counter with pause/reset
+  Screen 2: SETTINGS      Brightness, battery, WiFi status
+  Screen 3: FILES         SD card file browser
+  Viewer:   VIEWER        Overlay for images/audio/text
+
+Navigation:
+  - Swipe left:           Next screen (0 -> 1 -> 2 -> 3 -> 0)
+  - Swipe right:          Previous screen (0 -> 3 -> 2 -> 1 -> 0)
+  - Tap on file:          Open in viewer
+  - 3 sec long press:     Return from viewer
+
+
+4. POWER SAVING
+================================================================================
+
+Three phases of power saving:
+
+  Phase       Trigger               Brightness    Updates
+  ----------- --------------------- ------------- ---------------------
+  ACTIVE      After any touch       200/255       Everything active
+  DIMMED      15 sec inactivity     50/255        Everything active
+  SLEEP       30 sec inactivity     0/255         Updates paused
+
+Any touch interaction resets the timer and wakes the display immediately.
+
+
+5. SUPPORTED FILE TYPES
+================================================================================
+
+  Type          Extensions             Viewer           Color in browser
+  ------------- ---------------------- ---------------- -----------------
+  Image         JPG, JPEG, PNG,        Full screen      Green
+                GIF, BMP, PCX
+  Audio         MP3, WAV, OGG, FLAC    Audio player     Orange
+  Text          TXT, LOG, CSV          Text viewer      Light blue
+  Folder        (directory)            Browser          Blue
+
+
+6. PROJECT STRUCTURE
+================================================================================
+
+  ESP32_S3_Smartwatch/
+  |
+  |-- ESP32_S3_Smartwatch.ino    Main program (5504 lines, 205 KB)
+  |-- pin_config.h               GPIO pin definitions
+  |-- wifi_config.h              WiFi and NTP settings
+  |
+  |-- ui.h / ui.cpp              LVGL UI definitions (SquareLine Studio)
+  |-- ui_events.h / .cpp         UI event handlers
+  |-- ui_helpers.h / .cpp        UI helper functions
+  |-- ui_ScreenClock.cpp         Clock screen layout
+  |-- ui_ScreenSteps.cpp         Steps screen layout
+  |-- ui_ScreenSettings.cpp      Settings screen layout
+  |-- ui_ScreenFiles.cpp         Files screen layout
+  |
+  |-- images/                    PNG/JPEG files for SD card
+  |   |-- BG_Watch_Audio.png     Audio player background (410x502)
+  |   |-- button_play_75.png     Play button (75x75)
+  |   |-- button_pause_75.png    Pause button (75x75)
+  |   |-- button_prev_75.png     Previous button (75x75)
+  |   |-- button_next_75.png     Next button (75x75)
+  |   |-- button_repeat_75.png   Repeat button (75x75)
+  |
+  |-- libraries/                 Required third-party libraries
+  |-- documentatie/              Documentation (Dutch)
+  |-- documents/                 Documentation (English)
+
+
+7. VERSION HISTORY
+================================================================================
+
+  Version Date            Changes
+  ------- --------------- -----------------------------------------------
+  2.0.0   Jan 2026        First working version with LVGL and file browser
+  2.2.0   Jan 2026        Fix LVGL rendering conflict during viewer opening
+  2.2.1   Jan 2026        Fix PNG endianness (BIG -> LITTLE_ENDIAN)
+  2.2.2   Jan 2026        Diagnostics for PNG rendering problem
+  2.3.0   31 Jan 2026     PSRAM buffer for PNG (CO5300 QSPI fix),
+                           audio player with PNG buttons, volume control
+  2.3.1   1 Feb 2026      Arduino_Canvas for text/GIF/error viewer,
+                           text viewer with vertical and horizontal
+                           scrolling, larger font, memory-based line
+                           storage (up to 500 lines, 200 chars/line)
+
+
+================================================================================
+  End of document: 01 - PROJECT OVERVIEW
+================================================================================

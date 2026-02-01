@@ -1,0 +1,299 @@
+================================================================================
+  07 - USER MANUAL
+  How to operate the smartwatch
+================================================================================
+  Version:    2.3.1
+  Date:       1 February 2026
+  Author:     JWP van Renen
+================================================================================
+
+
+1. FIRST USE
+================================================================================
+
+After uploading the firmware:
+
+  1. The display briefly shows a welcome screen
+  2. The clock appears as the first screen
+  3. If WiFi is configured, the time is automatically
+     synchronized via the internet (NTP)
+  4. The smartwatch is now ready for use
+
+
+2. SWITCHING SCREENS
+================================================================================
+
+The smartwatch has 4 screens. Switch with horizontal swipes:
+
+  SWIPE LEFT  -->  Next screen
+  SWIPE RIGHT <--  Previous screen
+
+  Order: Clock -> Steps -> Settings -> Files -> Clock ...
+
+  Tips:
+  - Swipe at least 50 pixels
+  - Swipe more horizontally than vertically
+  - The screens slide with a smooth animation (300ms)
+
+
+3. SCREEN 1: CLOCK
+================================================================================
+
+  Display:
+  ---------
+  - Large digital time: e.g. "14:35"
+  - Seconds separate: e.g. "22"
+  - Date: e.g. "31 Januari 2026"
+  - Day name: e.g. "Vrijdag" (Dutch)
+
+  Time synchronization:
+  - Time is automatically retrieved via WiFi (NTP)
+  - Timezone: Europe/Brussels (automatic DST switching)
+  - Without WiFi: time starts at 00:00 and runs from boot
+
+  Actions: No special actions on this screen.
+  Swipe left/right to switch screens.
+
+
+4. SCREEN 2: STEP COUNTER
+================================================================================
+
+  Display:
+  ---------
+  - Title: "Stappen" (Steps)
+  - Step count: e.g. "1,234"
+  - Status: "Actief" (Active) or "Gepauzeerd" (Paused)
+
+  Actions:
+  -------
+  - SHORT TAP:     Pause or resume step counting
+  - LONG PRESS:    Reset step counter to 0 (>1 second)
+
+  How it works:
+  The built-in accelerometer (QMI8658) detects walking movements.
+  The algorithm analyzes the acceleration force and recognizes the
+  pattern of steps (peaks and valleys in the data).
+
+
+5. SCREEN 3: SETTINGS
+================================================================================
+
+  Display:
+  ---------
+  - Brightness slider (0-255)
+  - Battery percentage with color coding
+  - WiFi status
+
+  Brightness:
+  -----------
+  Drag the slider left (darker) or right (brighter).
+  The brightness is adjusted immediately.
+
+  Battery color codes:
+  - GREEN:  > 50% - Well charged
+  - YELLOW: 20-50% - Moderate, consider charging
+  - RED:    < 20% - Almost empty, charging recommended
+
+  WiFi status:
+  - "Verbonden" (Connected, blue) = WiFi active, time sync works
+  - "Geen" (None, red) = No WiFi connection
+
+
+6. SCREEN 4: FILE BROWSER
+================================================================================
+
+  Display:
+  ---------
+  - SD card status (size, current folder)
+  - File list with icons and colors
+  - Instruction text at bottom
+
+  Icons and colors:
+  - FOLDER icon (blue):       Subfolders
+  - IMAGE icon (green):       JPG, PNG, GIF, BMP files
+  - AUDIO icon (orange):      MP3, WAV, OGG, FLAC files
+  - FILE icon (light blue):   TXT, LOG, CSV files
+  - ".." (yellow):            Back to parent folder
+
+  Actions:
+  -------
+  - SCROLL:          Browse the list (swipe up/down)
+  - TAP on folder:   Open the folder
+  - TAP on "..":     Go back to parent folder
+  - TAP on file:     Open the file (after ~1 second)
+
+
+7. IMAGE VIEWER
+================================================================================
+
+  When you open an image from the file browser:
+
+  Supported formats:
+  - JPG / JPEG: Baseline JPEG (not Progressive)
+  - PNG: All variants (palette, true-color, alpha)
+  - BMP: 24-bit bitmap
+  - GIF: Placeholder (animation not supported)
+
+  Actions in the viewer:
+  --------------------
+  - SWIPE UP:       Next image in the folder
+  - SWIPE DOWN:     Previous image in the folder
+  - LONG PRESS:     Back to file browser (3 seconds)
+
+  Note: After opening there is a brief delay (~2 seconds)
+  before touch is accepted. This prevents unintended actions.
+
+
+8. AUDIO PLAYER
+================================================================================
+
+  When you open an audio file from the file browser:
+
+  Supported formats:
+  - MP3 (most common)
+  - WAV (uncompressed)
+  - OGG (Ogg Vorbis)
+  - FLAC (lossless)
+
+  Display:
+  ---------
+  - Background image (if PNG present on SD card)
+  - Song title (filename)
+  - "NOW PLAYING" subtitle
+  - 4 buttons: Previous | Play/Pause | Next | Repeat
+  - Volume bar with -/+ buttons
+  - Help text at bottom
+
+  Button functions:
+  ---------------
+  - PREVIOUS (<<):    Play the previous audio file
+  - PLAY/PAUSE:       Pause or resume playback
+  - NEXT (>>):        Play the next audio file
+  - REPEAT:           Restart the current song
+
+  Volume control:
+  ----------------
+  - TAP on "-":           Volume 1 step down
+  - TAP on "+":           Volume 1 step up
+  - SWIPE RIGHT:          Volume 3 steps up
+  - SWIPE LEFT:           Volume 3 steps down
+
+  Volume range: 0 (silent) to 21 (maximum)
+  Percentage is shown below the bar.
+
+  Return to browser:
+  - LONG PRESS (3 seconds): Stops music and returns
+
+
+9. TEXT VIEWER
+================================================================================
+
+  When you open a text file:
+
+  Display:
+  ---------
+  - Filename at top (cyan) with separator line
+  - Text content in white (larger font, ~32 characters per line)
+  - Footer with page information:
+    * Line numbers: e.g. "Regels 1-25 van 100"
+    * With horizontal scrolling: e.g. "R 1-25/100 K 11+"
+  - Scroll indicators:
+    * ^ v (yellow): more text above/below available
+    * < > (cyan): more text left/right available
+  - Help text: "Swipe: scroll | 3s druk: terug"
+
+  Actions:
+  -------
+  - SWIPE UP:       Scroll down (see more text, half page)
+  - SWIPE DOWN:     Scroll up (go back, half page)
+  - SWIPE LEFT:     Scroll right (see longer lines, 10 chars)
+  - SWIPE RIGHT:    Scroll left (back to beginning, 10 chars)
+  - LONG PRESS:     Back to browser (3 seconds)
+
+  Capacity:
+  - Maximum 500 lines per file
+  - Maximum 200 characters per line
+  - Unlimited scrolling through the entire file
+
+
+10. POWER SAVING
+================================================================================
+
+  The smartwatch automatically saves power:
+
+  Phase 1: ACTIVE
+  - After every touch
+  - Screen at normal brightness (200/255)
+  - All functions active
+
+  Phase 2: DIMMED
+  - After 15 seconds without touch
+  - Screen becomes darker (50/255)
+  - Still visible
+  - All functions still active
+
+  Phase 3: SLEEP
+  - After 30 seconds without touch
+  - Screen completely off (0/255)
+  - Updates paused
+  - Tap the screen to wake
+
+  On every touch the display immediately returns to
+  full brightness.
+
+
+11. PREPARING THE SD CARD
+================================================================================
+
+  Format: FAT32
+
+  Recommended folder structure:
+  /
+  |-- images/
+  |   |-- BG_Watch_Audio.png        (REQUIRED for audio player)
+  |   |-- button_play_75.png        (REQUIRED for audio player)
+  |   |-- button_pause_75.png       (REQUIRED for audio player)
+  |   |-- button_prev_75.png        (REQUIRED for audio player)
+  |   |-- button_next_75.png        (REQUIRED for audio player)
+  |   |-- button_repeat_75.png      (REQUIRED for audio player)
+  |
+  |-- music/                         (your own audio files)
+  |   |-- song1.mp3
+  |   |-- song2.wav
+  |
+  |-- photos/                        (your own images)
+  |   |-- vacation.jpg
+  |   |-- portrait.png
+
+  IMPORTANT: The /images/ folder with audio player files is
+  REQUIRED for the audio player. Without these files, simple
+  colored circles are shown as buttons (fallback).
+
+
+12. TIPS AND TRICKS
+================================================================================
+
+  - The file browser sorts files in FAT32 filesystem order
+    (usually order of creation).
+
+  - Large JPEG files are automatically scaled to fit the
+    screen (1:1, 1:2, 1:4 or 1:8).
+
+  - Progressive JPEG files are NOT supported.
+    Convert them to Baseline JPEG (open in Paint and save
+    again as JPEG).
+
+  - The audio player does not auto-advance to the next file.
+    After a song ends, playback stops. Use the >> button or
+    the repeat button.
+
+  - WiFi is only needed for time synchronization. All other
+    functions (files, audio, steps) work without WiFi.
+
+  - The display wakes immediately on touch, even from the
+    deepest sleep state.
+
+
+================================================================================
+  End of document: 07 - USER MANUAL
+================================================================================

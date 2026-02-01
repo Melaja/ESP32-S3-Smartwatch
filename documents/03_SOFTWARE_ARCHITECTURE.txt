@@ -1,0 +1,559 @@
+================================================================================
+  03 - SOFTWARE ARCHITECTURE
+  Detailed description of the .ino file and program structure
+================================================================================
+  Version:    2.3.1
+  Date:       1 February 2026
+  Author:     JWP van Renen
+================================================================================
+
+
+1. OVERVIEW
+================================================================================
+
+The program is built as a single Arduino .ino file of 5504 lines
+(205 KB). This is the standard Arduino approach: all functionality in
+one main file, supported by header and source files for the UI.
+
+The architecture combines two rendering systems:
+  - LVGL (Light and Versatile Graphics Library) for the 4 main screens
+  - Arduino_GFX for direct pixel rendering in the viewer (images, audio)
+
+These two systems can NEVER be active simultaneously. A boolean
+flag (fileViewerActive) switches between the two modes.
+
+
+2. DUAL RENDERING SYSTEM
+================================================================================
+
+  2.1 LVGL Mode (default)
+  ---------------------------
+  LVGL manages all 4 main screens (clock, steps, settings, files).
+  LVGL draws to a framebuffer in PSRAM (~400KB) and sends the complete
+  screen via the flush callback to the display.
+
+  Characteristics:
+  - Widget-based (labels, sliders, lists, buttons)
+  - Automatic re-rendering on changes
+  - Built-in scroll, animations, transitions
+  - FULL render mode: always draws the entire screen
+  - Single buffer in PSRAM (410x502x2 = 411,640 bytes)
+
+  2.2 GFX Mode (viewer)
+  -----------------------
+  When a file is opened, the system switches to direct GFX rendering.
+  LVGL is paused to prevent it from overwriting the GFX drawings.
+
+  Characteristics:
+  - Direct pixel control (draw16bitRGBBitmap, fillRect, etc.)
+  - PNG/JPEG decoding to display
+  - Custom touch handling (not via LVGL)
+  - Requires PSRAM buffering for CO5300 QSPI display
+
+  IMPORTANT: For text, GIF placeholder and error messages,
+  Arduino_Canvas (offscreen framebuffer) is used. Individual pixel
+  operations (gfx->print(), drawLine(), etc.) do NOT work reliably
+  on the CO5300 QSPI display. Arduino_Canvas draws everything to a
+  PSRAM buffer and sends it in one go via flush() ->
+  draw16bitRGBBitmap().
+
+  2.3 Switching LVGL -> GFX
+  --------------------------------
+  The switch is a critical process with these steps:
+
+  1. User taps on file -> ui_event_file_clicked() sets
+     pendingViewerOpen = true (does NOT draw directly!)
+  2. Back in loop(): lv_timer_handler() processes all LVGL events
+  3. AFTER lv_timer_handler(): pendingViewerOpen is processed
+  4. lv_scr_load(ui_ScreenViewer) -> load empty screen
+  5. lv_timer_handler() -> render the empty screen to display
+  6. delay(50) -> wait for DMA transfer
+  7. fileViewerActive = true -> LVGL now paused
+  8. Each viewer handles its own background:
+     - PNG/JPEG/BMP: fillScreenBlackPSRAM() + decoding
+     - Text/GIF/Error: Arduino_Canvas (offscreen framebuffer)
+     - Audio: PNG background loading
+  9. showImageFromSD() / showAudioPlayer() / showTextFromSD()
+
+  WHY this complex sequence?
+  If we don't let LVGL render the empty screen first, LVGL has a
+  "pending screen change" that later overwrites our GFX drawings.
+
+  2.4 Switching GFX -> LVGL
+  --------------------------------
+  When returning to the file browser:
+
+  1. exitFileViewer() is called
+  2. stopAudioPlayback() -> stop audio
+  3. freeTextLines() -> free text viewer memory
+  4. fileViewerActive = false
+  5. lv_scr_load(ui_ScreenFiles) -> load files screen
+  6. lv_timer_handler() -> force immediate rendering
+  7. populateFileList() -> refresh file list
+
+
+3. PROGRAM STRUCTURE (top to bottom in the .ino file)
+================================================================================
+
+  Lines        Section                         Description
+  ------------ ------------------------------- ----------------------------------
+  1-206        Header / comments               Version, description, documentation
+  207-300      #include statements             All library includes
+  300-480      Display driver instance          Arduino_GFX CO5300 QSPI setup
+  441-630      Constants and defines            Screen size, timing, thresholds
+  630-870      Global variables                 State, buffers, counters, text scroll
+  1483-1600    Display brightness functions     setDisplayBrightness(), registerActivity()
+  1601-1665    Power saving                     updatePowerSaving()
+  1669-1714    LVGL flush callback              my_disp_flush()
+  1715-1854    LVGL touch callback              my_touchpad_read() + swipe detection
+  1855-2025    WiFi and NTP functions           connectToWiFi(), initTime(), checkNtpSync()
+  1273-1438    IMU / Step counter               initIMU(), readAccelerometer(), detectStep()
+  1439-1482    Step display                     updateStepDisplay()
+  2026-2093    Time display                     updateTimeDisplay()
+  2094-2148    Date display                     updateDateDisplay()
+  2149-2206    Battery display                  updateBatteryLevel()
+  2207-2255    WiFi status display              updateWiFiStatus()
+  2256-2360    Screen navigation                nextScreen(), prevScreen()
+  2361-2465    SD card functions                initSDCard(), listSDFiles()
+  2466-2575    JPEG display                     jpegDrawCallback(), showJpegFromSD()
+  2576-2618    PNG callback                     pngDrawCallback()
+  2619-2710    PNG display (centered)           showPngFromSD()
+  2711-2809    PNG display (at position)        drawPngAtXY()
+  2810-2849    Automatic format detection        showImageFromSD()
+  2850-2903    GIF placeholder (Canvas)         showGifFromSD()
+  2904-3026    BMP display                      showBmpFromSD()
+  3027-3047    Text memory                      freeTextLines()
+  3048-3177    Text page rendering (Canvas)     renderTextPage()
+  3178-3250    Text loading                     showTextFromSD()
+  3251-3348    Audio UI helpers                 fillScreenBlackPSRAM(), etc.
+  3349-3403    Volume bar                       drawVolumeBar()
+  3404-3452    Control buttons                  drawControlButtons()
+  3453-3555    Audio player                     showAudioPlayer()
+  3556-3626    File browser: type detection     getFileTypeEnum(), buildFileListByType()
+  3627-3679    Viewer exit                      exitFileViewer()
+  3680-3870    Viewer touch                     handleViewerTouch()
+  3871-3902    Error display (Canvas)           showErrorFile()
+  3903-3999    File navigation                  showNextFile(), showPrevFile()
+  4000-4044    File type helpers                getFileTypeSymbol(), getFileTypeColor()
+  4045-4169    File click event                 ui_event_file_clicked()
+  4170-4211    File screen error                showFilesScreenError()
+  4212-4232    Folder navigation                navigateToFolder()
+  4233-4443    File list construction           populateFileList()
+  4444-4611    ES8311 codec                     es8311WriteReg/ReadReg(), initES8311()
+  4612-4689    Audio initialization             initAudio()
+  4690-4754    Audio playback                   startAudioPlayback()
+  4755-4783    Audio stop                       stopAudioPlayback()
+  4784-4817    Audio toggle                     toggleAudioPlayback()
+  4818-4914    Audio tap handling               handleAudioTap()
+  4915-4961    Touch initialization             initTouch()
+  4962-5250    setup() function                 Full initialization
+  5251-5479    loop() function                  Main loop
+  5480-5504    Audio library callbacks           audio_info(), audio_eof_mp3(), etc.
+
+
+4. INITIALIZATION SEQUENCE (setup())
+================================================================================
+
+The initialization order is CRITICAL. Some components depend on others:
+
+  Step  Component                 Depends on          Line #
+  ----- ------------------------- ------------------- --------
+  1     Serial (115200 baud)      -                   4977
+  2     I2C bus (Wire)            -                   4999
+  3     AXP2101 PMU               I2C                 5010
+  4     CO5300 Display            -                   5037
+  5     FT3168 Touch              I2C                 5056
+  6     QMI8658 IMU               I2C                 5065
+  7     SD card (SPI)             -                   5076
+  7b    Audio (ES8311 + I2S)      I2C + LEDC          5087
+  8     WiFi                      -                   5093
+  9     NTP time sync             WiFi                5099
+  10    LVGL init                 Display             5113
+  11    UI screens                LVGL                5190
+  12    Initial display refresh   UI                  5202
+
+  After step 12, the loop() function begins.
+
+
+5. MAIN LOOP (loop()) - Processing per iteration
+================================================================================
+
+The loop() function runs continuously (~200 iterations per second).
+Each iteration performs the following tasks:
+
+  5.1 LVGL Tick Update (every 5ms)
+  --------------------------------
+  lv_tick_inc() informs LVGL how much time has elapsed.
+  This is needed for animations, timeouts and timer callbacks.
+
+  5.2 LVGL Task Handler OR Viewer Touch
+  ---------------------------------------
+  if (fileViewerActive):
+      handleViewerTouch()     -> custom touch handling
+  else:
+      lv_timer_handler()      -> LVGL processes everything
+
+  This is the heart of the dual rendering system. Exactly ONE of
+  the two is always running.
+
+  5.3 Pending Viewer Processing
+  -----------------------------
+  If pendingViewerOpen == true, the viewer is opened.
+  This must happen AFTER lv_timer_handler() to prevent LVGL
+  from overwriting the GFX drawings.
+
+  5.4 Audio Loop
+  ---------------
+  audioLoop() calls audio.loop() when audio is active.
+  This is needed for continuous streaming of audio data from
+  SD card to I2S/ES8311.
+
+  5.5 Power Saving Update
+  -------------------------
+  updatePowerSaving() checks the inactivity timer and adjusts
+  display brightness (active -> dimmed -> sleep).
+
+  5.6 Periodic Updates (every second)
+  ---------------------------------------
+  Only when the display is NOT in sleep mode:
+  - Update time display
+  - Check NTP sync
+  - Update WiFi status
+  - Battery status (every 30 seconds)
+
+  5.7 Step Detection (every 20ms)
+  ---------------------------------
+  When IMU is available and step counting is active:
+  - Read accelerometer (50 Hz sample rate)
+  - Detect steps via peak-valley algorithm
+  - Update step counter display (every 500ms)
+
+  5.8 Delay (5ms)
+  -----------------
+  delay(5) prevents 100% CPU usage and gives the RTOS
+  scheduler time for background tasks.
+
+
+6. TOUCH HANDLING
+================================================================================
+
+There are TWO separate touch handling systems:
+
+  6.1 LVGL Touch (normal)
+  -------------------------
+  Function: my_touchpad_read()
+  Called by LVGL via lv_timer_handler().
+
+  Handles:
+  - Widget interactions (buttons, sliders, lists)
+  - Swipe detection for screen navigation
+  - Gesture recognition (left/right swipe)
+
+  Swipe logic:
+  - On touch release: calculate deltaX and deltaY
+  - If deltaX > SWIPE_THRESHOLD (50px) and more horizontal than
+    vertical: recognize as horizontal swipe
+  - Left swipe: nextScreen()
+  - Right swipe: prevScreen()
+
+  6.2 Viewer Touch
+  -----------------
+  Function: handleViewerTouch()
+  Called directly in loop() when fileViewerActive == true.
+
+  Processes in 4 phases:
+  - PHASE 0: ABSOLUTE BLOCK (first 2 seconds)
+    All touch is ignored to prevent ghost touches
+  - PHASE 1: WAIT FOR RELEASE
+    Wait until user lifts finger
+  - PHASE 2: DEBOUNCE (500ms)
+    Wait for stable state
+  - PHASE 3: NORMAL PROCESSING
+    * Tap: handleAudioTap() for audio buttons
+    * Text viewer:
+      - Swipe up/down: vertical scrolling (half page)
+      - Swipe left/right: horizontal scrolling (10 characters)
+    * Image viewer:
+      - Swipe up/down: next/previous file
+    * Audio viewer:
+      - Swipe left/right: volume adjustment (+/- 3 steps)
+    * Long press (3 sec): return to files
+
+
+7. PNG RENDERING - PSRAM BUFFER SYSTEM
+================================================================================
+
+This is the most complex part of the rendering pipeline.
+It solves the CO5300 QSPI problem (see section 2 in Hardware doc).
+
+  7.1 Problem
+  -------------
+  PNGdec decodes a PNG row by row via a callback. The callback calls
+  draw16bitRGBBitmap(x, y, buf, w, 1) for each row. On the CO5300
+  QSPI display this produces NO visible output.
+
+  7.2 Solution: PSRAM Buffer
+  ----------------------------
+  1. Allocate a buffer in PSRAM for the entire image:
+     bufSize = width x height x 2 bytes
+     pngPsramBuffer = heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM)
+
+  2. PNG callback copies each row to the buffer (memcpy)
+     instead of drawing:
+     memcpy(&pngPsramBuffer[y * width], lineBuffer, width * 2)
+
+  3. After decoding: draw the entire buffer in ONE call:
+     gfx->draw16bitRGBBitmap(x, y, pngPsramBuffer, w, h)
+
+  4. Free buffer:
+     heap_caps_free(pngPsramBuffer)
+
+  7.3 Two PNG Functions
+  ----------------------
+  showPngFromSD():  Shows PNG centered (for photo viewer)
+                    - Fills screen black first
+                    - Calculates centering offset
+
+  drawPngAtXY():    Draws PNG at specific position (for UI elements)
+                    - Does NOT fill screen black
+                    - Uses given X,Y coordinates
+                    - Used for audio player background and buttons
+
+  7.4 Fallback
+  -------------
+  If PSRAM allocation fails (insufficient memory), the system falls
+  back to direct per-row rendering. This does not work on CO5300 QSPI
+  but serves as a safety net.
+
+  7.5 Endianness
+  ---------------
+  PNG is decoded as RGB565 LITTLE_ENDIAN (native ESP32).
+  Arduino_GFX expects native-endian data for draw16bitRGBBitmap().
+  The SPI/QSPI bus handles byte-swapping internally for the display.
+
+
+8. TEXT VIEWER - CANVAS RENDERING SYSTEM
+================================================================================
+
+The text viewer uses Arduino_Canvas for offscreen rendering.
+
+  8.1 Architecture
+  -----------------
+  Arduino_Canvas provides an offscreen framebuffer that draws
+  everything to PSRAM. When flush() is called, it sends the entire
+  buffer via draw16bitRGBBitmap() to the display - the only method
+  that works reliably on the CO5300 QSPI display.
+
+  8.2 Text Storage
+  -----------------
+  Text files are loaded entirely into memory:
+  - textFileLines[]: String array in PSRAM (max 500 lines)
+  - Each line stored up to 200 characters (TEXT_MAX_LINE_LEN)
+  - textMaxCol tracks the longest line for horizontal scroll limits
+
+  8.3 Scrolling
+  ---------------
+  - textScrollLine: first visible line (vertical scroll)
+  - textScrollCol: first visible column (horizontal scroll)
+  - textLinesPerPage: calculated from available screen height
+  - Vertical scroll: half page per swipe gesture
+  - Horizontal scroll: 10 characters per swipe gesture
+
+  8.4 Rendering (renderTextPage)
+  --------------------------------
+  1. Create Arduino_Canvas (410x502, PSRAM backed)
+  2. Fill black background
+  3. Draw header: filename (cyan) + separator line
+  4. Draw text lines with textScrollCol offset applied
+  5. Draw footer: line info, scroll indicators (^v <>)
+  6. canvas->flush() sends everything to display
+  7. Delete canvas (free PSRAM)
+
+
+9. AUDIO SUBSYSTEM
+================================================================================
+
+  9.1 Library
+  -----------
+  ESP32-audioI2S (v3.4.4) is the audio engine.
+  This library:
+  - Decodes MP3, WAV, OGG, FLAC in software
+  - Sends PCM audio data to I2S interface
+  - Supports SD card as source
+  - Provides volume control (0-21 steps)
+  - Callback system for status updates
+
+  9.2 ES8311 Codec Configuration
+  ------------------------------
+  The ES8311 is fully configured via I2C register writes.
+  Key registers:
+  - 0x00: Reset and CSM_ON (sequencer)
+  - 0x01-0x08: Clock configuration
+  - 0x09-0x0A: I2S format (16-bit, standard I2S)
+  - 0x0D-0x0E: Power management (DAC + ADC on)
+  - 0x15: DAC mute control (0x00 = not muted)
+  - 0x17: DAC volume (0x00 = maximum)
+  - 0x32: Output gain (+24dB for speaker)
+  - 0x37: Output mixer (DAC to output)
+
+  9.3 MCLK via LEDC
+  -------------------
+  The ES8311 needs an external MCLK:
+  - Frequency: 11,289,600 Hz (256 x 44100 Hz)
+  - Generation: ESP32 LEDC peripheral on GPIO16
+  - Duty cycle: 50% (square wave)
+  - ledcAttach(16, 11289600, 1) configures the pin
+  - ledcWrite(16, 1) starts the signal
+
+  9.4 Power Amplifier
+  --------------------
+  GPIO46 (PA_CTRL) switches the external amplifier:
+  - LOW at boot (prevents noise)
+  - HIGH at start of playback (after I2S setup)
+  - LOW at stop of playback
+  - 100ms wait after enabling for stabilization
+
+  9.5 Audio Player UI
+  --------------------
+  The audio player uses PNG images from the SD card:
+  - BG_Watch_Audio.png (410x502) as background
+  - 4 buttons: prev, play/pause, next, repeat (each 75x75)
+  - Volume bar with +/- buttons
+  - Song title and "NOW PLAYING" text
+
+  All buttons have a fallback to programmatic drawings
+  if the PNG files are not found on the SD card.
+
+
+10. FILE BROWSER
+================================================================================
+
+  10.1 File List (populateFileList)
+  ---------------------------------------
+  The file list is built dynamically:
+  1. First ".." button (back to parent directory, not in root)
+  2. All subdirectories (blue, folder icon)
+  3. All files (color per type)
+
+  Each item is an LVGL list button with:
+  - Icon (LV_SYMBOL_DIRECTORY/IMAGE/AUDIO/FILE)
+  - Filename
+  - Color per file type
+  - User data: full path as string
+  - Event callback: folder_clicked or file_clicked
+
+  10.2 Opening a File
+  --------------------
+  When clicking on a file:
+  1. Determine file type based on extension
+  2. Build list of all files of the same type (for navigation)
+  3. Reset all touch state variables
+  4. Set pendingViewerOpen = true
+  5. Return to loop() -> pending viewer is processed
+
+  10.3 File Navigation in Viewer
+  ---------------------------------
+  Within the viewer, the user can browse files of the same type
+  with swipe up/down (for images) or buttons (for audio):
+  - fileList[]: array of up to 64 file paths
+  - currentFileIndex: current position
+  - Cyclic: after last file comes first again
+
+
+11. LVGL CONFIGURATION
+================================================================================
+
+  11.1 Display Driver
+  --------------------
+  - Resolution: 410x502
+  - Color format: RGB565 (16-bit)
+  - Render mode: LV_DISPLAY_RENDER_MODE_FULL
+  - Buffer: single buffer in PSRAM (411,640 bytes)
+  - Flush callback: my_disp_flush() -> gfx->draw16bitRGBBitmap()
+
+  11.2 Input Driver
+  ------------------
+  - Type: LV_INDEV_TYPE_POINTER (touchscreen)
+  - Read callback: my_touchpad_read()
+  - Long press time: 1000ms
+  - Touch data: via FT3168 I2C interrupt
+
+  11.3 UI Screens (SquareLine Studio)
+  ------------------------------------
+  The UI screens are designed in SquareLine Studio 1.6.0 and
+  exported as C code:
+
+  ui_ScreenClock:
+    - ui_time_label (hours:minutes, large digital font)
+    - ui_seconds_label (seconds, smaller)
+    - ui_date_label (date in Dutch)
+    - ui_day_label (day name in Dutch)
+
+  ui_ScreenSteps:
+    - ui_steps_title ("Stappen")
+    - ui_steps_count (step count)
+    - ui_steps_status (active/paused)
+
+  ui_ScreenSettings:
+    - ui_brightness_slider (0-255)
+    - ui_battery_value (percentage + color)
+    - ui_wifi_status (connected/none)
+    - ui_version_label
+
+  ui_ScreenFiles:
+    - ui_files_sd_status (SD card info)
+    - ui_files_list (scrollable list)
+    - ui_files_info (instruction/error message)
+
+  ui_ScreenViewer:
+    - Empty screen (background color only)
+    - Used as "canvas" for GFX drawings
+
+  11.4 Custom Fonts
+  ------------------
+  Defined in ui.h:
+  - ui_font_Digital96: Large digital font (clock)
+  - ui_font_Digital72: Medium digital font
+  - ui_font_Digital48: Small digital font
+  - ui_font_Regular24: Normal font 24pt
+  - ui_font_Regular18: Normal font 18pt
+  - ui_font_Regular14: Normal font 14pt
+  - ui_font_Bold24: Bold font 24pt
+
+
+12. MEMORY USAGE
+================================================================================
+
+  12.1 Flash (16 MB)
+  -------------------
+  Partition: app3M_fat9M_16MB
+  - App: 3 MB (firmware)
+  - FAT: 9 MB (file system, not used)
+  - Bootloader + NVS: remainder
+
+  Firmware size: ~2.5 MB (compressed ~1.6 MB during upload)
+
+  12.2 PSRAM (8 MB)
+  -------------------
+  Usage:
+  - LVGL framebuffer: ~400 KB (411,640 bytes)
+  - PNG PSRAM buffer: variable
+    * BG_Watch_Audio.png: 410x502x2 = 411,640 bytes
+    * Button PNG (75x75): 75x75x2 = 11,250 bytes
+  - Arduino_Canvas: 410x502x2 = 411,640 bytes (text viewer)
+  - Audio decoder buffers (ESP32-audioI2S)
+  - Text line storage: up to 500 x 200 chars
+
+  Peak PSRAM usage during audio player: ~1 MB
+
+  12.3 Internal SRAM
+  -------------------
+  - Stack and heap
+  - I2C/SPI buffers
+  - WiFi stack
+  - FreeRTOS kernel
+
+
+================================================================================
+  End of document: 03 - SOFTWARE ARCHITECTURE
+================================================================================
