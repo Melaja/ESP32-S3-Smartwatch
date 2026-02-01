@@ -1,0 +1,521 @@
+================================================================================
+  03 - SOFTWARE ARCHITECTUUR
+  Gedetailleerde beschrijving van de .ino file en programmastructuur
+================================================================================
+  Versie:     2.3.1
+  Datum:      1 februari 2026
+  Auteur:     JWP van Renen
+================================================================================
+
+
+1. OVERZICHT
+================================================================================
+
+Het programma is opgebouwd als een enkele Arduino .ino file van 5504 regels
+(205 KB). Dit is de standaard Arduino-aanpak: alle functionaliteit in een
+hoofdbestand, ondersteund door header- en bronbestanden voor de UI.
+
+De architectuur combineert twee rendering systemen:
+  - LVGL (Light and Versatile Graphics Library) voor de 4 hoofdschermen
+  - Arduino_GFX voor directe pixel-rendering in de viewer (afbeeldingen, audio)
+
+Deze twee systemen kunnen NIET tegelijkertijd actief zijn. Een boolean
+vlag (fileViewerActive) schakelt tussen de twee modi.
+
+
+2. DUBBEL RENDERING SYSTEEM
+================================================================================
+
+  2.1 LVGL Modus (standaard)
+  ---------------------------
+  LVGL beheert alle 4 hoofdschermen (klok, stappen, instellingen, bestanden).
+  LVGL tekent naar een framebuffer in PSRAM (~400KB) en stuurt het complete
+  scherm via de flush callback naar het display.
+
+  Kenmerken:
+  - Widget-gebaseerd (labels, sliders, lijsten, knoppen)
+  - Automatische re-rendering bij wijzigingen
+  - Ingebouwde scroll, animaties, transitions
+  - FULL render mode: tekent altijd het hele scherm
+  - Single buffer in PSRAM (410x502x2 = 411.640 bytes)
+
+  2.2 GFX Modus (viewer)
+  -----------------------
+  Wanneer een bestand wordt geopend, schakelt het systeem naar directe
+  GFX-rendering. LVGL wordt gepauzeerd om te voorkomen dat het de
+  GFX-tekeningen overschrijft.
+
+  Kenmerken:
+  - Directe pixel controle (draw16bitRGBBitmap, fillRect, etc.)
+  - PNG/JPEG decodering naar display
+  - Eigen touch-verwerking (niet via LVGL)
+  - Vereist PSRAM buffering voor CO5300 QSPI display
+
+  BELANGRIJK: Voor tekst, GIF-placeholder en foutmeldingen wordt
+  Arduino_Canvas (offscreen framebuffer) gebruikt. Individuele pixel
+  operaties (gfx->print(), drawLine(), etc.) werken NIET betrouwbaar
+  op het CO5300 QSPI display. Arduino_Canvas tekent alles naar een
+  PSRAM buffer en stuurt het in een keer via flush() ->
+  draw16bitRGBBitmap().
+
+  2.3 Overschakeling LVGL -> GFX
+  --------------------------------
+  De overschakeling is een kritiek proces met deze stappen:
+
+  1. Gebruiker tikt op bestand -> ui_event_file_clicked() zet
+     pendingViewerOpen = true (tekent NIET direct!)
+  2. Terug in loop(): lv_timer_handler() verwerkt alle LVGL events
+  3. NA lv_timer_handler(): pendingViewerOpen wordt verwerkt
+  4. lv_scr_load(ui_ScreenViewer) -> laad leeg scherm
+  5. lv_timer_handler() -> render het lege scherm naar display
+  6. delay(50) -> wacht op DMA transfer
+  7. fileViewerActive = true -> LVGL nu gepauzeerd
+  8. Elke viewer handelt zijn eigen achtergrond af:
+     - PNG/JPEG/BMP: fillScreenBlackPSRAM() + decodering
+     - Tekst/GIF/Error: Arduino_Canvas (offscreen framebuffer)
+     - Audio: PNG achtergrond laden
+  9. showImageFromSD() / showAudioPlayer() / showTextFromSD()
+
+  WAAROM deze complexe sequentie?
+  Als we LVGL niet eerst het lege scherm laten renderen, heeft LVGL
+  een "pending screen change" die later onze GFX-tekeningen overschrijft.
+
+  2.4 Overschakeling GFX -> LVGL
+  --------------------------------
+  Bij terugkeer naar de bestandsbrowser:
+
+  1. exitFileViewer() wordt aangeroepen
+  2. stopAudioPlayback() -> stop audio
+  3. fileViewerActive = false
+  4. lv_scr_load(ui_ScreenFiles) -> laad bestanden scherm
+  5. lv_timer_handler() -> forceer directe rendering
+  6. populateFileList() -> ververs bestandenlijst
+
+
+3. PROGRAMMA STRUCTUUR (van boven naar beneden in het .ino bestand)
+================================================================================
+
+  Regels       Sectie                          Beschrijving
+  ------------ ------------------------------- ----------------------------------
+  1-206        Header / commentaar             Versie, beschrijving, documentatie
+  207-300      #include statements             Alle library includes
+  300-480      Display driver instantie        Arduino_GFX CO5300 QSPI setup
+  441-630      Constanten en defines           Schermgrootte, timing, drempels
+  630-870      Globale variabelen              State, buffers, tellers, tekst scroll
+  1483-1600    Display helderheid functies     setDisplayBrightness(), registerActivity()
+  1601-1665    Power saving                    updatePowerSaving()
+  1669-1714    LVGL flush callback             my_disp_flush()
+  1715-1854    LVGL touch callback             my_touchpad_read() + swipe detectie
+  1855-2025    WiFi en NTP functies            connectToWiFi(), initTime(), checkNtpSync()
+  1273-1438    IMU / Stappenteller             initIMU(), readAccelerometer(), detectStep()
+  1439-1482    Stappen display                 updateStepDisplay()
+  2026-2093    Tijd display                    updateTimeDisplay()
+  2094-2148    Datum display                   updateDateDisplay()
+  2149-2206    Batterij display                updateBatteryLevel()
+  2207-2255    WiFi status display             updateWiFiStatus()
+  2256-2360    Scherm navigatie                nextScreen(), prevScreen()
+  2361-2465    SD-kaart functies               initSDCard(), listSDFiles()
+  2466-2575    JPEG weergave                   jpegDrawCallback(), showJpegFromSD()
+  2576-2618    PNG callback                    pngDrawCallback()
+  2619-2710    PNG weergave (centered)         showPngFromSD()
+  2711-2809    PNG weergave (op positie)       drawPngAtXY()
+  2810-2849    Automatische format detectie    showImageFromSD()
+  2850-2903    GIF placeholder (Canvas)        showGifFromSD()
+  2904-3026    BMP weergave                    showBmpFromSD()
+  3027-3047    Tekst geheugen                  freeTextLines()
+  3048-3177    Tekst pagina rendering (Canvas) renderTextPage()
+  3178-3250    Tekst laden                     showTextFromSD()
+  3251-3348    Audio UI helpers                fillScreenBlackPSRAM(), etc.
+  3349-3403    Volume balk                     drawVolumeBar()
+  3404-3452    Control knoppen                 drawControlButtons()
+  3453-3555    Audio player                    showAudioPlayer()
+  3556-3626    File browser: type detectie     getFileTypeEnum(), buildFileListByType()
+  3627-3679    Viewer exit                     exitFileViewer()
+  3680-3870    Viewer touch                    handleViewerTouch()
+  3871-3902    Fout weergave (Canvas)          showErrorFile()
+  3903-3999    Bestand navigatie               showNextFile(), showPrevFile()
+  4000-4044    Bestandstype helpers            getFileTypeSymbol(), getFileTypeColor()
+  4045-4169    Bestand klik event              ui_event_file_clicked()
+  4170-4211    Foutmelding bestanden           showFilesScreenError()
+  4212-4232    Folder navigatie                navigateToFolder()
+  4233-4443    Bestanden lijst opbouw          populateFileList()
+  4444-4611    ES8311 codec                    es8311WriteReg/ReadReg(), initES8311()
+  4612-4689    Audio initialisatie             initAudio()
+  4690-4754    Audio playback                  startAudioPlayback()
+  4755-4783    Audio stop                      stopAudioPlayback()
+  4784-4817    Audio toggle                    toggleAudioPlayback()
+  4818-4914    Audio tap verwerking            handleAudioTap()
+  4915-4961    Touch initialisatie             initTouch()
+  4962-5250    setup() functie                 Volledige initialisatie
+  5251-5479    loop() functie                  Hoofdlus
+  5480-5504    Audio library callbacks         audio_info(), audio_eof_mp3(), etc.
+
+
+4. INITIALISATIE VOLGORDE (setup())
+================================================================================
+
+De volgorde van initialisatie is KRITIEK. Sommige componenten zijn
+afhankelijk van andere:
+
+  Stap  Component                 Afhankelijk van     Regelnr
+  ----- ------------------------- ------------------- --------
+  1     Serial (115200 baud)      -                   4685
+  2     I2C bus (Wire)            -                   4707
+  3     AXP2101 PMU               I2C                 4718
+  4     CO5300 Display            -                   4745
+  5     FT3168 Touch              I2C                 4764
+  6     QMI8658 IMU               I2C                 4773
+  7     SD-kaart (SPI)            -                   4784
+  7b    Audio (ES8311 + I2S)      I2C + LEDC          4795
+  8     WiFi                      -                   4801
+  9     NTP tijdsync              WiFi                4807
+  10    LVGL init                 Display             4821
+  11    UI schermen               LVGL                4898
+  12    Initieel display refresh  UI                  4910
+
+  Na stap 12 begint de loop() functie.
+
+
+5. HOOFDLUS (loop()) - Verwerking per iteratie
+================================================================================
+
+De loop() functie draait continu (~200 iteraties per seconde).
+Elke iteratie voert de volgende taken uit:
+
+  5.1 LVGL Tick Update (elke 5ms)
+  --------------------------------
+  lv_tick_inc() informeert LVGL hoeveel tijd er is verstreken.
+  Dit is nodig voor animaties, timeouts en timer callbacks.
+
+  5.2 LVGL Task Handler OF Viewer Touch
+  ---------------------------------------
+  if (fileViewerActive):
+      handleViewerTouch()     -> eigen touch verwerking
+  else:
+      lv_timer_handler()      -> LVGL verwerkt alles
+
+  Dit is het hart van het dubbele rendering systeem. Er draait
+  altijd precies EEN van de twee.
+
+  5.3 Pending Viewer Verwerking
+  -----------------------------
+  Als pendingViewerOpen == true, wordt de viewer geopend.
+  Dit moet NA lv_timer_handler() om te voorkomen dat LVGL
+  de GFX-tekeningen overschrijft.
+
+  5.4 Audio Loop
+  ---------------
+  audioLoop() roept audio.loop() aan als audio actief is.
+  Dit is nodig voor continue streaming van audiodata van
+  SD-kaart naar I2S/ES8311.
+
+  5.5 Power Saving Update
+  -------------------------
+  updatePowerSaving() controleert de inactiviteit timer en
+  past de display helderheid aan (actief -> gedimd -> slaap).
+
+  5.6 Periodieke Updates (elke seconde)
+  ---------------------------------------
+  Alleen als display NIET in slaapstand:
+  - Tijd display bijwerken
+  - NTP sync controleren
+  - WiFi status bijwerken
+  - Batterij status (elke 30 seconden)
+
+  5.7 Stappen Detectie (elke 20ms)
+  ---------------------------------
+  Als IMU beschikbaar en staptelling actief:
+  - Lees accelerometer (50 Hz sample rate)
+  - Detecteer stappen via peak-valley algoritme
+  - Update stappenteller display (elke 500ms)
+
+  5.8 Delay (5ms)
+  -----------------
+  delay(5) voorkomt 100% CPU gebruik en geeft de RTOS
+  scheduler tijd voor achtergrondtaken.
+
+
+6. TOUCH VERWERKING
+================================================================================
+
+Er zijn TWEE aparte touch verwerkingssystemen:
+
+  6.1 LVGL Touch (normaal)
+  -------------------------
+  Functie: my_touchpad_read()
+  Wordt aangeroepen door LVGL via lv_timer_handler().
+
+  Verwerkt:
+  - Widget interacties (knoppen, sliders, lijsten)
+  - Swipe detectie voor schermnavigatie
+  - Gesture herkenning (links/rechts swipe)
+
+  Swipe logica:
+  - Bij touch release: bereken deltaX en deltaY
+  - Als deltaX > SWIPE_THRESHOLD (50px) en meer horizontaal dan
+    verticaal: herken als horizontale swipe
+  - Links swipe: nextScreen()
+  - Rechts swipe: prevScreen()
+
+  6.2 Viewer Touch
+  -----------------
+  Functie: handleViewerTouch()
+  Wordt direct aangeroepen in loop() als fileViewerActive == true.
+
+  Verwerkt in 4 fasen:
+  - FASE 0: ABSOLUTE BLOKKADE (eerste 2 seconden)
+    Alle touch wordt genegeerd om ghost touches te voorkomen
+  - FASE 1: WACHT OP RELEASE
+    Wacht tot gebruiker vinger optilt
+  - FASE 2: DEBOUNCE (500ms)
+    Wacht op stabiele toestand
+  - FASE 3: NORMALE VERWERKING
+    * Tap: handleAudioTap() voor audio knoppen
+    * Tekst viewer:
+      - Swipe omhoog/omlaag: verticaal scrollen (half pagina)
+      - Swipe links/rechts: horizontaal scrollen (10 karakters)
+    * Afbeelding viewer:
+      - Swipe omhoog/omlaag: volgende/vorige bestand
+    * Audio viewer:
+      - Swipe links/rechts: volume aanpassing (+/- 3 stappen)
+    * Long press (3 sec): terug naar bestanden
+
+
+7. PNG RENDERING - PSRAM BUFFER SYSTEEM
+================================================================================
+
+Dit is het meest complexe deel van de rendering pipeline.
+Het lost het CO5300 QSPI probleem op (zie sectie 2 in Hardware doc).
+
+  7.1 Probleem
+  -------------
+  PNGdec decodeert een PNG regel voor regel via een callback.
+  De callback roept draw16bitRGBBitmap(x, y, buf, w, 1) aan
+  voor elke regel. Op het CO5300 QSPI display produceert dit
+  GEEN zichtbare output.
+
+  7.2 Oplossing: PSRAM Buffer
+  ----------------------------
+  1. Alloceer een buffer in PSRAM voor de hele afbeelding:
+     bufSize = breedte x hoogte x 2 bytes
+     pngPsramBuffer = heap_caps_malloc(bufSize, MALLOC_CAP_SPIRAM)
+
+  2. PNG callback kopieert elke regel naar de buffer (memcpy)
+     in plaats van te tekenen:
+     memcpy(&pngPsramBuffer[y * width], lineBuffer, width * 2)
+
+  3. Na decodering: teken de hele buffer in EEN aanroep:
+     gfx->draw16bitRGBBitmap(x, y, pngPsramBuffer, w, h)
+
+  4. Buffer vrijgeven:
+     heap_caps_free(pngPsramBuffer)
+
+  7.3 Twee PNG Functies
+  ----------------------
+  showPngFromSD():  Toont PNG gecentreerd (voor foto viewer)
+                    - Maakt scherm eerst zwart
+                    - Berekent centrering offset
+
+  drawPngAtXY():    Tekent PNG op specifieke positie (voor UI elementen)
+                    - Maakt scherm NIET zwart
+                    - Gebruikt opgegeven X,Y coordinaten
+                    - Gebruikt voor audio player achtergrond en knoppen
+
+  7.4 Fallback
+  -------------
+  Als PSRAM allocatie mislukt (niet genoeg geheugen), valt het systeem
+  terug naar directe per-regel rendering. Dit werkt niet op CO5300 QSPI
+  maar is een veiligheidsnet.
+
+  7.5 Endianness
+  ---------------
+  PNG wordt gedecodeerd als RGB565 LITTLE_ENDIAN (native ESP32).
+  Arduino_GFX verwacht native-endian data voor draw16bitRGBBitmap().
+  De SPI/QSPI bus doet intern de byte-swapping voor het display.
+
+
+8. AUDIO SUBSYSTEEM
+================================================================================
+
+  8.1 Library
+  -----------
+  ESP32-audioI2S (v3.4.4) is de audio engine.
+  Deze library:
+  - Decodeert MP3, WAV, OGG, FLAC in software
+  - Stuurt PCM audio data naar I2S interface
+  - Ondersteunt SD-kaart als bron
+  - Biedt volume control (0-21 stappen)
+  - Callback systeem voor status updates
+
+  8.2 ES8311 Codec Configuratie
+  ------------------------------
+  De ES8311 wordt volledig geconfigureerd via I2C register writes.
+  Belangrijke registers:
+  - 0x00: Reset en CSM_ON (sequencer)
+  - 0x01-0x08: Clock configuratie
+  - 0x09-0x0A: I2S format (16-bit, standaard I2S)
+  - 0x0D-0x0E: Power management (DAC + ADC aan)
+  - 0x15: DAC mute control (0x00 = niet gedempt)
+  - 0x17: DAC volume (0x00 = maximum)
+  - 0x32: Output gain (+24dB voor speaker)
+  - 0x37: Output mixer (DAC naar output)
+
+  8.3 MCLK via LEDC
+  -------------------
+  De ES8311 heeft een externe MCLK nodig:
+  - Frequentie: 11.289.600 Hz (256 x 44100 Hz)
+  - Generatie: ESP32 LEDC periferie op GPIO16
+  - Duty cycle: 50% (blokgolf)
+  - ledcAttach(16, 11289600, 1) configureert de pin
+  - ledcWrite(16, 1) start het signaal
+
+  8.4 Power Amplifier
+  --------------------
+  GPIO46 (PA_CTRL) schakelt de externe versterker:
+  - LOW bij boot (voorkomt ruis)
+  - HIGH bij start playback (na I2S setup)
+  - LOW bij stop playback
+  - 100ms wachttijd na inschakelen voor stabilisatie
+
+  8.5 Audio Player UI
+  --------------------
+  De audio player gebruikt PNG afbeeldingen van de SD-kaart:
+  - BG_Watch_Audio.png (410x502) als achtergrond
+  - 4 knoppen: prev, play/pause, next, repeat (elk 75x75)
+  - Volume balk met +/- knoppen
+  - Song titel en "NOW PLAYING" tekst
+
+  Alle knoppen hebben fallback naar programmatische tekeningen
+  als de PNG-bestanden niet gevonden worden op de SD-kaart.
+
+
+9. BESTANDSBROWSER
+================================================================================
+
+  9.1 Bestandenlijst (populateFileList)
+  ---------------------------------------
+  De bestandenlijst wordt dynamisch opgebouwd:
+  1. Eerst ".." knop (terug naar parent directory, niet in root)
+  2. Alle subdirectories (blauw, map icoon)
+  3. Alle bestanden (kleur per type)
+
+  Elk item is een LVGL list button met:
+  - Icoon (LV_SYMBOL_DIRECTORY/IMAGE/AUDIO/FILE)
+  - Bestandsnaam
+  - Kleur per bestandstype
+  - User data: volledig pad als string
+  - Event callback: folder_clicked of file_clicked
+
+  9.2 Bestand Openen
+  --------------------
+  Bij klik op een bestand:
+  1. Bepaal bestandstype op basis van extensie
+  2. Bouw lijst van alle bestanden van hetzelfde type (voor navigatie)
+  3. Reset alle touch state variabelen
+  4. Zet pendingViewerOpen = true
+  5. Terug naar loop() -> pending viewer wordt verwerkt
+
+  9.3 Bestand Navigatie in Viewer
+  ---------------------------------
+  Binnen de viewer kan de gebruiker door bestanden van hetzelfde
+  type bladeren met swipe omhoog/omlaag:
+  - fileList[]: array van tot 64 bestandspaden
+  - currentFileIndex: huidige positie
+  - Cyclisch: na laatste bestand komt eerste weer
+
+
+10. LVGL CONFIGURATIE
+================================================================================
+
+  10.1 Display Driver
+  --------------------
+  - Resolutie: 410x502
+  - Kleurformaat: RGB565 (16-bit)
+  - Render modus: LV_DISPLAY_RENDER_MODE_FULL
+  - Buffer: single buffer in PSRAM (411.640 bytes)
+  - Flush callback: my_disp_flush() -> gfx->draw16bitRGBBitmap()
+
+  10.2 Input Driver
+  ------------------
+  - Type: LV_INDEV_TYPE_POINTER (touchscreen)
+  - Read callback: my_touchpad_read()
+  - Long press time: 1000ms
+  - Touch data: via FT3168 I2C interrupt
+
+  10.3 UI Schermen (SquareLine Studio)
+  ------------------------------------
+  De UI schermen zijn ontworpen in SquareLine Studio 1.6.0 en
+  geexporteerd als C-code:
+
+  ui_ScreenClock:
+    - ui_time_label (uren:minuten, groot digitaal font)
+    - ui_seconds_label (seconden, kleiner)
+    - ui_date_label (datum in Nederlands)
+    - ui_day_label (dagnaam in Nederlands)
+
+  ui_ScreenSteps:
+    - ui_steps_title ("Stappen")
+    - ui_steps_count (aantal stappen)
+    - ui_steps_status (actief/gepauzeerd)
+
+  ui_ScreenSettings:
+    - ui_brightness_slider (0-255)
+    - ui_battery_value (percentage + kleur)
+    - ui_wifi_status (verbonden/geen)
+    - ui_version_label
+
+  ui_ScreenFiles:
+    - ui_files_sd_status (SD kaart info)
+    - ui_files_list (scrollbare lijst)
+    - ui_files_info (instructie/foutmelding)
+
+  ui_ScreenViewer:
+    - Leeg scherm (alleen achtergrondkleur)
+    - Gebruikt als "canvas" voor GFX-tekeningen
+
+  10.4 Custom Fonts
+  ------------------
+  Gedefinieerd in ui.h:
+  - ui_font_Digital96: Groot digitaal font (klok)
+  - ui_font_Digital72: Medium digitaal font
+  - ui_font_Digital48: Klein digitaal font
+  - ui_font_Regular24: Normaal font 24pt
+  - ui_font_Regular18: Normaal font 18pt
+  - ui_font_Regular14: Normaal font 14pt
+  - ui_font_Bold24: Vet font 24pt
+
+
+11. GEHEUGENGEBRUIK
+================================================================================
+
+  11.1 Flash (16 MB)
+  -------------------
+  Partitie: app3M_fat9M_16MB
+  - App: 3 MB (firmware)
+  - FAT: 9 MB (file system, niet gebruikt)
+  - Bootloader + NVS: rest
+
+  Firmware grootte: ~2.5 MB (gecomprimeerd ~1.6 MB bij upload)
+
+  11.2 PSRAM (8 MB)
+  -------------------
+  Gebruik:
+  - LVGL framebuffer: ~400 KB (411.640 bytes)
+  - PNG PSRAM buffer: variabel
+    * BG_Watch_Audio.png: 410x502x2 = 411.640 bytes
+    * Button PNG (75x75): 75x75x2 = 11.250 bytes
+  - Audio decoder buffers (ESP32-audioI2S)
+
+  Totaal PSRAM bij audio player: ~1 MB piek
+
+  11.3 Internal SRAM
+  -------------------
+  - Stack en heap
+  - I2C/SPI buffers
+  - WiFi stack
+  - FreeRTOS kernel
+
+
+================================================================================
+  Einde document: 03 - SOFTWARE ARCHITECTUUR
+================================================================================

@@ -1,0 +1,176 @@
+================================================================================
+  BESTANDSOVERZICHT - ESP32_S3_Smartwatch Export
+================================================================================
+  Datum:    1 februari 2026
+  Versie:   2.3.1
+  Auteur:   JWP van Renen
+  Board:    Waveshare ESP32-S3 Touch AMOLED 2.06" (CO5300 QSPI display, 410x502)
+================================================================================
+
+
+1. ARDUINO IDE INSTELLINGEN
+================================================================================
+  Board:              ESP32S3 Dev Module
+  USB CDC On Boot:    Enabled
+  USB DFU On Boot:    Disabled
+  Flash Size:         16 MB
+  Flash Mode:         QIO
+  PSRAM:              OPI PSRAM
+  Partition Scheme:   app3M_fat9M_16MB (of "Huge APP")
+  CPU Frequency:      240 MHz
+  USB Mode:           Hardware CDC and JTAG
+  Upload Speed:       921600
+  Serial Monitor:     115200
+
+  FQBN: esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,
+        PartitionScheme=app3M_fat9M_16MB,PSRAM=opi
+
+
+2. BRONBESTANDEN (root folder)
+================================================================================
+  Bestand                          Grootte     Beschrijving
+  -------------------------------- ----------- ------------------------------------
+  ESP32_S3_Smartwatch.ino          205.617 B   Hoofdprogramma (5504 regels, v2.3.1)
+  pin_config.h                         895 B   GPIO pin definities
+  wifi_config.h                        899 B   WiFi netwerk configuratie
+  ui.h                               2.074 B   LVGL UI header (SquareLine Studio)
+  ui.cpp                             3.115 B   LVGL UI implementatie
+  ui_events.h                          542 B   UI event handler header
+  ui_events.cpp                      2.234 B   UI event handler implementatie
+  ui_helpers.h                         813 B   UI helper functies header
+  ui_helpers.cpp                     1.042 B   UI helper functies implementatie
+  ui_ScreenClock.cpp                 1.832 B   Klok scherm UI
+  ui_ScreenFiles.cpp                 2.963 B   Bestanden scherm UI
+  ui_ScreenSettings.cpp              3.690 B   Instellingen scherm UI
+  ui_ScreenSteps.cpp                 1.730 B   Stappenteller scherm UI
+
+
+3. AFBEELDINGEN (images/ folder) - voor SD-kaart
+================================================================================
+  Bestand                          Grootte     Beschrijving
+  -------------------------------- ----------- ------------------------------------
+  BG_Watch_Audio.png               309.075 B   Audio player achtergrond (410x502)
+  button_play_75.png                10.328 B   Play knop (75x75, RGBA)
+  button_pause_75.png               10.098 B   Pauze knop (75x75, RGBA)
+  button_prev_75.png                10.524 B   Vorige knop (75x75, RGBA)
+  button_next_75.png                10.407 B   Volgende knop (75x75, RGBA)
+  button_repeat_75.png              11.038 B   Herhaal knop (75x75, RGBA)
+  Ikke.jpeg                        360.629 B   Foto (JPEG viewer test)
+  Laura.JPG                        423.633 B   Foto (JPEG viewer test)
+
+  LET OP: Deze afbeeldingen moeten op de SD-kaart staan in /images/
+
+
+4. LIBRARIES (libraries/ folder)
+================================================================================
+  Library                          Versie      Auteur                  Grootte
+  -------------------------------- ----------- ----------------------- --------
+  lvgl                             9.3.0       kisvegabor              159 MB
+  lv_conf.h                        -           (LVGL configuratie)      49 KB
+  GFX_Library_for_Arduino          1.6.4       Moon On Our Nation       28 MB
+  Arduino_DriveBus                 1.0.1       Xk_w                   215 KB
+  XPowersLib                       0.3.2       Lewis He                6,5 MB
+  ESP32-audioI2S-master            3.4.4       schreibfaul1             30 MB
+  AnimatedGIF                      2.2.0       Larry Bank               25 MB
+  PNGdec                           1.1.6       Larry Bank              2,7 MB
+  TJpg_Decoder                     1.1.0       Bodmer                  628 KB
+
+  Totale grootte libraries: ~252 MB
+
+
+5. DOCUMENTATIE
+================================================================================
+  Bestand                                                 Beschrijving
+  ------------------------------------------------------- -------------------------
+  Arduino IDE instellingen voor Waveshare ESP32.txt        IDE configuratie (NL)
+  GPIO Pins Audio and Microfoon.txt                        Audio codec pin mapping
+  BESTANDSOVERZICHT.txt                                    Dit bestand
+
+
+6. INSTALLATIE-INSTRUCTIES
+================================================================================
+
+  Methode A: Libraries handmatig kopiëren
+  ----------------------------------------
+  1. Kopieer de inhoud van libraries/ naar je Arduino libraries folder:
+     C:\Users\<gebruiker>\Documents\Arduino\libraries\
+  2. Kopieer lv_conf.h naar dezelfde libraries folder
+  3. Open ESP32_S3_Smartwatch.ino in Arduino IDE
+  4. Stel de board-instellingen in zoals hierboven beschreven
+  5. Kopieer de images/ folder naar de root van je SD-kaart
+  6. Compileer en upload
+
+  Methode B: Libraries via Arduino Library Manager
+  -------------------------------------------------
+  Installeer deze libraries via Sketch > Include Library > Manage Libraries:
+  - lvgl (versie 9.3.0)
+  - GFX Library for Arduino (versie 1.6.4)
+  - XPowersLib (versie 0.3.2)
+  - AnimatedGIF (versie 2.2.0)
+  - PNGdec (versie 1.1.6)
+  - TJpg_Decoder (versie 1.1.0)
+
+  Handmatig te installeren (niet in Library Manager):
+  - Arduino_DriveBus (versie 1.0.1) - van Waveshare
+  - ESP32-audioI2S-master (versie 3.4.4) - van GitHub
+  - lv_conf.h moet in de Arduino/libraries/ folder staan
+
+
+7. AUDIO CODEC PINOUT (ES8311 + ES7210)
+================================================================================
+  Functie         GPIO    Beschrijving
+  --------------- ------- --------------------
+  I2C_SDA         15      I2C data
+  I2C_SCL         14      I2C klok
+  I2S_MCLK        16      Master klok
+  I2S_SCLK        41      Seriële klok
+  I2S_ASDOUT      42      Audio data uit
+  I2S_LRCK        45      Links/rechts klok
+  I2S_DSDIN       40      Audio data in (mic)
+  PA_CTRL         46      Versterker aan/uit
+
+
+8. MAPSTRUCTUUR
+================================================================================
+  c:\export\smartwatch\ESP32_S3_Smartwatch\
+  |
+  |-- ESP32_S3_Smartwatch.ino        (hoofdprogramma)
+  |-- pin_config.h                   (GPIO configuratie)
+  |-- wifi_config.h                  (WiFi instellingen)
+  |-- ui.h / ui.cpp                  (LVGL UI)
+  |-- ui_events.h / ui_events.cpp    (UI events)
+  |-- ui_helpers.h / ui_helpers.cpp  (UI helpers)
+  |-- ui_ScreenClock.cpp             (klok scherm)
+  |-- ui_ScreenFiles.cpp             (bestanden scherm)
+  |-- ui_ScreenSettings.cpp          (instellingen scherm)
+  |-- ui_ScreenSteps.cpp             (stappen scherm)
+  |-- BESTANDSOVERZICHT.txt          (dit bestand)
+  |-- Arduino IDE instellingen...txt (IDE setup)
+  |-- GPIO Pins Audio...txt          (audio pinout)
+  |
+  |-- images/
+  |   |-- BG_Watch_Audio.png         (audio player achtergrond)
+  |   |-- button_play_75.png         (play knop)
+  |   |-- button_pause_75.png        (pauze knop)
+  |   |-- button_prev_75.png         (vorige knop)
+  |   |-- button_next_75.png         (volgende knop)
+  |   |-- button_repeat_75.png       (herhaal knop)
+  |   |-- Ikke.jpeg                  (foto)
+  |   |-- Laura.JPG                  (foto)
+  |
+  |-- libraries/
+      |-- lv_conf.h                  (LVGL configuratie)
+      |-- lvgl/                      (v9.3.0)
+      |-- GFX_Library_for_Arduino/   (v1.6.4)
+      |-- Arduino_DriveBus/          (v1.0.1)
+      |-- XPowersLib/                (v0.3.2)
+      |-- ESP32-audioI2S-master/     (v3.4.4)
+      |-- AnimatedGIF/               (v2.2.0)
+      |-- PNGdec/                    (v1.1.6)
+      |-- TJpg_Decoder/              (v1.1.0)
+
+
+================================================================================
+  Totale export grootte: ~251 MB
+  Einde bestandsoverzicht
+================================================================================

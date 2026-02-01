@@ -1,0 +1,32 @@
+/*
+ * ============================================================================
+ * WiFi Configuration Template
+ * ============================================================================
+ *
+ * Copy this file to wifi_config.h and fill in your WiFi credentials.
+ * IMPORTANT: wifi_config.h is excluded from git via .gitignore to prevent
+ * accidentally sharing sensitive data!
+ *
+ * ============================================================================
+ */
+
+#ifndef WIFI_CONFIG_H
+#define WIFI_CONFIG_H
+
+// WiFi network settings - change these to your own network
+const char *WIFI_SSID     = "YourNetworkName";
+const char *WIFI_PASSWORD = "YourPassword";
+
+// NTP server for time synchronization
+const char *NTP_SERVER    = "pool.ntp.org";
+
+// Timezone setting
+// Format: standard offset, DST name, DST start, DST end
+// Examples:
+//   Netherlands/Belgium:  "CET-1CEST,M3.5.0,M10.5.0/3"
+//   UK:                   "GMT0BST,M3.5.0/1,M10.5.0"
+//   US Eastern:           "EST5EDT,M3.2.0,M11.1.0"
+//   US Pacific:           "PST8PDT,M3.2.0,M11.1.0"
+const char *TZ_INFO       = "CET-1CEST,M3.5.0,M10.5.0/3";
+
+#endif // WIFI_CONFIG_H

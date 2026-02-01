@@ -1,0 +1,303 @@
+================================================================================
+  02 - HARDWARE EN PINOUT DOCUMENTATIE
+  ESP32-S3 Smartwatch - Waveshare ESP32-S3 Touch AMOLED 2.06"
+================================================================================
+  Versie:     2.3.1
+  Datum:      1 februari 2026
+  Auteur:     JWP van Renen
+================================================================================
+
+
+1. MICROCONTROLLER: ESP32-S3
+================================================================================
+
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Chip                    ESP32-S3 (QFN56), revisie v0.2
+  CPU                     Dual-core Xtensa LX7 @ 240 MHz
+  LP Core                 ULP (Ultra Low Power) co-processor
+  Flash                   16 MB, QIO modus (Quad I/O, 80 MHz)
+  PSRAM                   8 MB, OPI modus (Octal SPI, AP_3v3)
+  WiFi                    802.11 b/g/n (2.4 GHz), station + AP modus
+  Bluetooth               5.0 LE (Low Energy)
+  USB                     USB-Serial/JTAG (Hardware CDC and JTAG modus)
+  Kristal                 40 MHz
+  MAC adres               Uniek per module (bijv. 80:b5:4e:d8:12:fc)
+  Werkspanning            3.3V (geregeld door AXP2101 PMIC)
+
+
+2. DISPLAY: CO5300 AMOLED
+================================================================================
+
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Type                    AMOLED (Active Matrix Organic LED)
+  Controller              CO5300
+  Resolutie               410 x 502 pixels
+  Kleurdiepte             16-bit RGB565 (65.536 kleuren)
+  Interface               QSPI (Quad SPI) - 4 data lijnen
+  Helderheid              0-255 niveaus, via MIPI DCS commando
+  Verversingssnelheid     Tot 60 FPS
+
+  QSPI Display Pinout:
+  ----------------------
+  Functie       GPIO    Beschrijving
+  ------------- ------- ----------------------------------------
+  LCD_SDIO0     4       SPI Data lijn 0 (MOSI)
+  LCD_SDIO1     5       SPI Data lijn 1
+  LCD_SDIO2     6       SPI Data lijn 2
+  LCD_SDIO3     7       SPI Data lijn 3
+  LCD_SCLK      11      SPI Klok signaal
+  LCD_CS        12      Chip Select (actief laag)
+  LCD_RESET     8       Hardware reset (actief laag)
+
+  BELANGRIJK - CO5300 QSPI Eigenaardigheid:
+  ------------------------------------------
+  De CO5300 via QSPI interface kan NIET correct omgaan met zeer kleine
+  pixel transfers. De functie draw16bitRGBBitmap(x, y, buf, w, 1) met
+  h=1 (enkele regel) produceert GEEN zichtbare output.
+
+  Oplossing: Buffer de volledige afbeelding in PSRAM en teken in een
+  enkele aanroep met draw16bitRGBBitmap(x, y, buf, w, h) waar h de
+  volledige hoogte van de afbeelding is. Dit is dezelfde aanpak die
+  LVGL intern gebruikt (FULL render mode stuurt het hele scherm in
+  een keer naar het display).
+
+
+3. TOUCH CONTROLLER: FT3168
+================================================================================
+
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Type                    Capacitief multi-touch
+  Controller              FT3168 (FocalTech)
+  Interface               I2C @ adres 0x38
+  Interrupt               GPIO38 (actief laag)
+  Reset                   GPIO9 (actief laag)
+
+  Touch Pinout:
+  ----------------------
+  Functie       GPIO    Beschrijving
+  ------------- ------- ----------------------------------------
+  IIC_SDA       15      I2C Data lijn (gedeeld met audio)
+  IIC_SCL       14      I2C Klok lijn (gedeeld met audio)
+  TP_INT        38      Touch interrupt (actief laag)
+  TP_RESET      9       Touch controller reset
+
+  Power Modi:
+  ----------------------
+  Modus         Verbruik    Beschrijving
+  ------------- ----------- ----------------------------------------
+  ACTIVE        ~15 mA      Continu scannen
+  MONITOR       ~3 mA       Laag verbruik, wakker bij touch (GEBRUIKT)
+  HIBERNATE     ~1 uA       Zeer laag, handmatige wake nodig
+
+  Touch Gebieden (in viewer modus):
+  -----------------------------------
+  De touch verwerking in de viewer gebruikt de volgende zones:
+
+  Audio Player knoppen (y=360..435):
+    Vorige:      x=22..117
+    Play/Pause:  x=112..207
+    Volgende:    x=202..297
+    Herhaal:     x=292..387
+
+  Volume controls (y=440..475):
+    Volume -:    x=35..75
+    Volume +:    x=335..385
+
+  Swipe detectie:
+    Minimale afstand: 50 pixels (SWIPE_THRESHOLD)
+    Long press: 3000 ms (LONG_PRESS_TIME)
+
+
+4. POWER MANAGEMENT: AXP2101 PMIC
+================================================================================
+
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Chip                    AXP2101 (X-Powers)
+  Interface               I2C @ adres 0x34
+  Functie                 Batterij laden, voltage regulatie, monitoring
+
+  Functies:
+  ----------------------
+  - Batterij opladen (Li-Ion/Li-Po)
+  - Batterij spanning meting
+  - Batterij percentage schatting
+  - Batterij detectie (aanwezig/afwezig)
+  - Interrupt generatie (niet gebruikt, gepolld)
+
+  Batterij Kleurcodering op Display:
+  -----------------------------------
+  Niveau        Kleur       Hex Code
+  ------------- ----------- ----------
+  > 50%         Groen       0x00FF00
+  20% - 50%     Geel        0xFFFF00
+  < 20%         Rood        0xFF0000
+
+
+5. AUDIO SUBSYSTEEM: ES8311 + ES7210
+================================================================================
+
+  5.1 Audio Codec: ES8311 (Speaker Output)
+  ------------------------------------------
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Chip                    ES8311 (Everest Semiconductor)
+  Interface               I2C (config) + I2S (audio data)
+  I2C Adres               0x18
+  Chip ID                 0x83 (register 0xFD)
+  DAC Resolutie           24-bit (gebruikt als 16-bit in dit project)
+  Sample Rate             44.1 kHz (via MCLK = 11.2896 MHz)
+  DAC Gain                +24 dB (register 0x32 = 0xC0)
+  Volume Bereik           0-21 stappen (ESP32-audioI2S library)
+
+  5.2 Audio ADC: ES7210 (Microfoon Input)
+  ------------------------------------------
+  De ES7210 is aanwezig op het board maar wordt in dit project NIET
+  actief gebruikt. De pinnen zijn wel geconfigureerd.
+
+  5.3 Audio Pinout:
+  ----------------------
+  Functie       GPIO    Richting    Beschrijving
+  ------------- ------- ----------- ----------------------------------------
+  I2C_SDA       15      Bidirect.   I2C data (gedeeld met touch)
+  I2C_SCL       14      Bidirect.   I2C klok (gedeeld met touch)
+  I2S_MCLK      16      Output      Master Clock (11.2896 MHz via LEDC)
+  I2S_BCLK      41      Output      Bit Clock (SCLK)
+  I2S_LRCK      45      Output      Left/Right Clock (Word Select)
+  I2S_DOUT      40      Output      Audio data naar ES8311 (DSDIN)
+  I2S_DIN       42      Input       Audio data van ES7210 (ASDOUT)
+  PA_CTRL       46      Output      Power Amplifier enable (HIGH=aan)
+
+  5.4 MCLK Generatie:
+  ----------------------
+  De ES8311 heeft een externe Master Clock (MCLK) nodig. Deze wordt
+  gegenereerd door de ESP32-S3 LEDC (LED Control) periferie:
+
+    MCLK = 256 x Fs = 256 x 44100 = 11.289.600 Hz (11.29 MHz)
+
+  De LEDC genereert een blokgolf met 50% duty cycle op GPIO16.
+
+  5.5 ES8311 Initialisatie Sequentie:
+  ------------------------------------
+  1. Software Reset (reg 0x00 = 0x1F, dan 0x80)
+  2. Clock configuratie (MCLK extern, dividers)
+  3. I2S format: standaard I2S, 16-bit woorden
+  4. Power up: referentie + analoog + IBIAS
+  5. ADC configuratie (microfoon)
+  6. DAC configuratie (DAC unmute, volume max)
+  7. Output: +24dB gain, speaker enable
+
+  5.6 Audio Playback Flow:
+  --------------------------
+  1. PA_CTRL -> HIGH (versterker aan)
+  2. Wacht 100ms (stabilisatie)
+  3. audio.setVolume(audioVolume)
+  4. audio.connecttoFS(SD, filename)
+  5. audio.loop() wordt continu aangeroepen in main loop
+  6. Bij einde: audio.stopSong(), PA_CTRL -> LOW
+
+
+6. IMU / ACCELEROMETER: QMI8658
+================================================================================
+
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Chip                    QMI8658 (QST Corporation)
+  Type                    6-axis IMU (accelerometer + gyroscoop)
+  Interface               I2C (gedeeld met touch en audio)
+  Gebruik                 Alleen accelerometer voor stap detectie
+
+  Stap Detectie Algoritme:
+  --------------------------
+  1. Lees X, Y, Z acceleratie waarden (50 Hz, elke 20ms)
+  2. Bereken vector magnitude: sqrt(x^2 + y^2 + z^2)
+  3. Pas low-pass filter toe voor smoothing
+  4. Detecteer pieken en dalen in gefilterde data
+  5. Een stap = piek gevolgd door dal met voldoende amplitude
+
+  Stappenteller functies:
+  - Tik op scherm: pauze/hervat tellen
+  - Lang drukken (>1 sec): reset naar 0
+  - Update elke 500ms op display
+
+
+7. SD-KAART
+================================================================================
+
+  Eigenschap              Waarde
+  ----------------------- --------------------------------------------------
+  Type                    MicroSD (SDSC, SDHC ondersteund)
+  Interface               SPI (HSPI bus, niet standaard VSPI)
+  SPI Frequentie          20 MHz
+  Mount Point             /sd (standaard)
+
+  SD-kaart Pinout:
+  ----------------------
+  Functie       GPIO    Beschrijving
+  ------------- ------- ----------------------------------------
+  SDMMC_CLK     2       SPI Clock
+  SDMMC_CMD     1       MOSI (Master Out, Slave In)
+  SDMMC_DATA    3       MISO (Master In, Slave Out)
+  SDMMC_CS      17      Chip Select (actief laag)
+
+  BELANGRIJK: De SD-kaart gebruikt een APARTE SPI bus (HSPI) om
+  conflicten met het QSPI display te voorkomen.
+
+  Vereiste mapstructuur op SD-kaart:
+  -----------------------------------
+  /
+  |-- images/
+  |   |-- BG_Watch_Audio.png        (audio player achtergrond)
+  |   |-- button_play_75.png        (play knop)
+  |   |-- button_pause_75.png       (pauze knop)
+  |   |-- button_prev_75.png        (vorige knop)
+  |   |-- button_next_75.png        (volgende knop)
+  |   |-- button_repeat_75.png      (herhaal knop)
+  |
+  |-- music/                         (optioneel: audiobestanden)
+  |-- photos/                        (optioneel: afbeeldingen)
+
+
+8. COMPLETE GPIO TOEWIJZING
+================================================================================
+
+  GPIO    Functie              Component       Richting
+  ------- -------------------- --------------- ----------
+  1       SDMMC_CMD (MOSI)     SD-kaart        Output
+  2       SDMMC_CLK            SD-kaart        Output
+  3       SDMMC_DATA (MISO)    SD-kaart        Input
+  4       LCD_SDIO0            Display         Output
+  5       LCD_SDIO1            Display         Output
+  6       LCD_SDIO2            Display         Output
+  7       LCD_SDIO3            Display         Output
+  8       LCD_RESET            Display         Output
+  9       TP_RESET             Touch           Output
+  11      LCD_SCLK             Display         Output
+  12      LCD_CS               Display         Output
+  14      IIC_SCL              I2C bus          Bidirect.
+  15      IIC_SDA              I2C bus          Bidirect.
+  16      I2S_MCLK             Audio codec     Output
+  17      SDMMC_CS             SD-kaart        Output
+  38      TP_INT               Touch           Input
+  40      I2S_DOUT (DSDIN)     Audio codec     Output
+  41      I2S_BCLK (SCLK)     Audio codec     Output
+  42      I2S_DIN (ASDOUT)     Audio ADC       Input
+  45      I2S_LRCK             Audio codec     Output
+  46      PA_CTRL              Versterker      Output
+
+  I2C Bus Apparaten:
+  -------------------
+  Adres     Apparaat        Functie
+  --------- --------------- ----------------------------------
+  0x18      ES8311          Audio codec (DAC/ADC)
+  0x34      AXP2101         Power management (PMIC)
+  0x38      FT3168          Touch controller
+  (var.)    QMI8658         IMU (accelerometer/gyroscoop)
+
+
+================================================================================
+  Einde document: 02 - HARDWARE EN PINOUT DOCUMENTATIE
+================================================================================

@@ -1,0 +1,557 @@
+================================================================================
+  04 - FUNCTIEBESCHRIJVINGEN
+  Gedetailleerde uitleg van alle functies in ESP32_S3_Smartwatch.ino
+================================================================================
+  Versie:     2.3.1
+  Datum:      1 februari 2026
+  Auteur:     JWP van Renen
+================================================================================
+
+
+1. LVGL CALLBACKS
+================================================================================
+
+  1.1 my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
+  -------------------------------------------------------------------------------
+  Doel:     LVGL flush callback - stuurt pixels naar het fysieke display.
+  Wanneer:  Aangeroepen door LVGL wanneer een deel van het scherm opnieuw
+            getekend moet worden.
+  Werking:  Roept gfx->draw16bitRGBBitmap() aan om de pixel data naar het
+            CO5300 display te sturen. Na het tekenen wordt
+            lv_display_flush_ready() aangeroepen om LVGL te informeren
+            dat de transfer klaar is.
+  Params:   disp    - LVGL display object
+            area    - Rechthoek die getekend moet worden (x1,y1,x2,y2)
+            px_map  - Pointer naar pixel data in RGB565 formaat
+
+  1.2 my_touchpad_read(lv_indev_t *indev, lv_indev_data_t *data)
+  ----------------------------------------------------------------
+  Doel:     LVGL touch read callback - leest touch status.
+  Wanneer:  Aangeroepen door LVGL via lv_timer_handler() voor elke
+            input polling cyclus.
+  Werking:  Leest touch data van FT3168 via I2C. Bij actieve touch
+            worden X,Y coordinaten doorgegeven aan LVGL. Bij release
+            wordt swipe detectie uitgevoerd (deltaX/deltaY berekening).
+  Returns:  Vult data->point.x/y en data->state in.
+  Swipe:    Als deltaX > 50px en meer horizontaal dan verticaal:
+            - Positief deltaX: prevScreen() (swipe naar rechts)
+            - Negatief deltaX: nextScreen() (swipe naar links)
+
+
+2. DISPLAY EN POWER FUNCTIES
+================================================================================
+
+  2.1 setDisplayBrightness(uint8_t brightness)
+  ----------------------------------------------
+  Doel:     Stelt de AMOLED helderheid in.
+  Werking:  Stuurt MIPI DCS commando (0x51) naar CO5300 controller
+            via de Arduino_GFX bus interface.
+  Params:   brightness - Waarde 0-255 (0=uit, 255=maximaal)
+  Noot:     Wordt aangeroepen door power saving en bij slider wijziging.
+
+  2.2 registerActivity()
+  ----------------------
+  Doel:     Registreert gebruikersactiviteit voor power saving.
+  Werking:  Zet lastActivityTime op millis(). Als display in slaapstand
+            of gedimd is, wordt het direct teruggebracht naar vol
+            helderheid (NORMAL_BRIGHTNESS = 200).
+  Wanneer:  Bij elke touch, bij start van PNG laden, en in de viewer.
+
+  2.3 updatePowerSaving()
+  ------------------------
+  Doel:     Beheert de 3-staps power saving (actief->gedimd->slaap).
+  Werking:  Berekent inactieve tijd (millis() - lastActivityTime).
+            Bij > DIM_TIMEOUT (15s): dim naar DIM_BRIGHTNESS (50).
+            Bij > SLEEP_TIMEOUT (30s): slaap (brightness 0).
+  Timing:   Aangeroepen elke loop() iteratie (~200x per seconde).
+
+  Constanten:
+    NORMAL_BRIGHTNESS = 200     Normale helderheid
+    DIM_BRIGHTNESS    = 50      Gedimde helderheid
+    DIM_TIMEOUT       = 15000   15 seconden tot dimmen
+    SLEEP_TIMEOUT     = 30000   30 seconden tot slapen
+
+
+3. WIFI EN NTP FUNCTIES
+================================================================================
+
+  3.1 connectToWiFi()
+  --------------------
+  Doel:     Maakt verbinding met het geconfigureerde WiFi netwerk.
+  Werking:  Gebruikt WiFi.begin(SSID, PASSWORD) uit wifi_config.h.
+            Wacht maximaal 20 seconden op verbinding (polled elke 500ms).
+            Print IP-adres bij succes.
+  Returns:  void (wifiConnected wordt intern gezet)
+
+  3.2 initTime()
+  ---------------
+  Doel:     Synchroniseert tijd via NTP en configureert tijdzone.
+  Werking:  configTzTime(TZ_INFO, NTP_SERVER) stelt tijdzone en
+            NTP server in. Wacht maximaal 10 seconden op sync.
+  Tijdzone: CET-1CEST,M3.5.0,M10.5.0/3
+            = CET (UTC+1) in winter
+            = CEST (UTC+2) in zomer (maart-oktober)
+  Server:   be.pool.ntp.org (configurable)
+
+  3.3 checkNtpSync()
+  -------------------
+  Doel:     Periodieke controle of NTP resync nodig is.
+  Werking:  Elke 60 seconden controleert of de tijd geldig is.
+            Bij ongeldige tijd (jaar < 2024): probeert opnieuw
+            te synchroniseren als WiFi verbonden is.
+
+
+4. IMU EN STAPPENTELLER FUNCTIES
+================================================================================
+
+  4.1 initIMU()
+  --------------
+  Doel:     Initialiseert de QMI8658 6-axis IMU.
+  Werking:  Configureert accelerometer via I2C.
+            Stelt sample rate en gevoeligheid in.
+  Returns:  true als QMI8658 gevonden en geconfigureerd.
+
+  4.2 readAccelerometer()
+  ------------------------
+  Doel:     Leest X, Y, Z acceleratie waarden van QMI8658.
+  Werking:  I2C register reads van accelerometer data registers.
+            Waarden worden opgeslagen in globale variabelen.
+  Timing:   Aangeroepen elke 20ms (50 Hz sample rate).
+
+  4.3 detectStep()
+  -----------------
+  Doel:     Detecteert stappen op basis van accelerometer data.
+  Werking:  Peak-valley detectie algoritme:
+            1. Bereken magnitude: sqrt(x^2 + y^2 + z^2)
+            2. Low-pass filter voor smoothing
+            3. Detecteer pieken (lokale maxima)
+            4. Detecteer dalen (lokale minima)
+            5. Stap = piek + dal met voldoende amplitude verschil
+  Output:   Verhoogt stepCount globale variabele bij detectie.
+
+  4.4 updateStepDisplay()
+  ------------------------
+  Doel:     Werkt het stappenteller display bij.
+  Werking:  Update ui_steps_count label met huidige stepCount.
+            Update ui_steps_status met "Actief" of "Gepauzeerd".
+  Timing:   Elke 500ms of direct bij nieuwe stap detectie.
+
+
+5. DISPLAY UPDATE FUNCTIES
+================================================================================
+
+  5.1 updateTimeDisplay(int hours, int minutes, int seconds)
+  -----------------------------------------------------------
+  Doel:     Werkt de tijdweergave bij op het klokscherm.
+  Werking:  Vergelijkt nieuwe tijd met vorige waarde (statische buffers).
+            Update ALLEEN bij wijziging om onnodige LVGL redraws
+            te voorkomen. Format: "HH:MM" en "SS".
+  Optim.:   1 update per seconde (voor seconden), 1 per minuut (voor tijd).
+
+  5.2 updateDateDisplay(int day, int month, int year, int weekday)
+  -----------------------------------------------------------------
+  Doel:     Werkt datum en dagnaam bij op het klokscherm.
+  Werking:  Format: "17 Januari 2026" en "Vrijdag" (Nederlands).
+            Gebruikt maandNamen[] en dagNamen[] arrays.
+            Update alleen bij wijziging (normaal 1x per dag).
+  Params:   month = 0-11 (C standaard tm_mon)
+            weekday = 0-6 (0=zondag, tm_wday)
+
+  5.3 updateBatteryLevel(int percentage)
+  ----------------------------------------
+  Doel:     Werkt batterij percentage en kleur bij.
+  Werking:  Toont "XX%" met kleurcodering:
+            >50% = groen, 20-50% = geel, <20% = rood.
+  Timing:   Elke 30 seconden.
+
+  5.4 updateWiFiStatus(bool connected)
+  --------------------------------------
+  Doel:     Toont WiFi verbindingsstatus.
+  Werking:  "Verbonden" (cyaan) of "Geen" (rood).
+  Timing:   Elke seconde (maar update alleen bij wijziging).
+
+
+6. SCHERM NAVIGATIE FUNCTIES
+================================================================================
+
+  6.1 nextScreen()
+  -----------------
+  Doel:     Navigeert naar het volgende scherm.
+  Werking:  currentScreen = (currentScreen + 1) % 4
+            Laadt het corresponderende scherm met slide-links animatie.
+            Bij scherm 3 (bestanden): roept ook populateFileList() aan.
+  Animatie: LV_SCR_LOAD_ANIM_MOVE_LEFT, 300ms, geen delay.
+
+  6.2 prevScreen()
+  -----------------
+  Doel:     Navigeert naar het vorige scherm.
+  Werking:  currentScreen = (currentScreen + 3) % 4
+            Mathematisch equivalent aan -1 maar zonder negatieve getallen.
+  Animatie: LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300ms.
+
+
+7. SD-KAART FUNCTIES
+================================================================================
+
+  7.1 initSDCard()
+  -----------------
+  Doel:     Initialiseert de MicroSD kaart via HSPI bus.
+  Werking:  sdSPI.begin() configureert de SPI pinnen.
+            SD.begin() mount de kaart op 20 MHz.
+            Print kaart type (MMC/SDSC/SDHC) en grootte.
+  Returns:  true als SD kaart succesvol gemount.
+
+  7.2 listSDFiles(const char *dirname, uint8_t levels)
+  -----------------------------------------------------
+  Doel:     Print bestandenlijst naar Serial Monitor.
+  Werking:  Opent directory, doorloopt alle bestanden/mappen.
+            Recursief als levels > 0.
+  Gebruik:  Alleen bij boot voor debug output.
+
+
+8. AFBEELDING WEERGAVE FUNCTIES
+================================================================================
+
+  8.1 jpegDrawCallback(int16_t x, y, uint16_t w, h, uint16_t *bitmap)
+  --------------------------------------------------------------------
+  Doel:     TJpg_Decoder callback voor JPEG blokken.
+  Werking:  Tekent elk gedecodeerd blok (MCU) naar het display.
+            Past imageXOffset/imageYOffset toe voor centrering.
+            Controleert schermgrenzen voor clipping.
+  Returns:  true om door te gaan met decoderen.
+
+  8.2 showJpegFromSD(const char *filename, bool centerX, bool centerY)
+  ---------------------------------------------------------------------
+  Doel:     Toont een JPEG van SD kaart op het display.
+  Werking:  1. Haal dimensies op zonder te decoderen
+            2. Bepaal optimale schaalfactor (1, 2, 4 of 8)
+            3. Bereken centrering offset
+            4. Decodeer en teken via callback
+  Schaling: Automatisch (kleinste schaal die binnen scherm past).
+  Fout:     Detecteert progressive JPEG en CMYK (niet ondersteund).
+
+  8.3 pngDrawCallback(PNGDRAW *pDraw)
+  ------------------------------------
+  Doel:     PNGdec callback voor PNG regels.
+  Werking:  Twee modi:
+            A) PSRAM buffer modus (als pngPsramBuffer != nullptr):
+               Kopieert regel naar PSRAM buffer met memcpy().
+            B) Directe modus (fallback):
+               Tekent regel direct met draw16bitRGBBitmap(h=1).
+               WERKT NIET op CO5300 QSPI!
+  Endian:   PNG_RGB565_LITTLE_ENDIAN (native ESP32).
+
+  8.4 showPngFromSD(const char *filename, bool centerX, bool centerY)
+  --------------------------------------------------------------------
+  Doel:     Toont een PNG gecentreerd op het display.
+  Werking:  1. Open PNG, haal dimensies op
+            2. Bereken centrering offset
+            3. Maak scherm zwart
+            4. Alloceer PSRAM buffer (w * h * 2 bytes)
+            5. Decodeer PNG (callback vult buffer)
+            6. Teken volledige buffer in een keer
+            7. Vrijgeven PSRAM buffer
+
+  8.5 drawPngAtXY(const char *sdPath, int16_t x, int16_t y)
+  -----------------------------------------------------------
+  Doel:     Tekent PNG op specifieke positie (zonder scherm te wissen).
+  Werking:  Identiek aan showPngFromSD maar:
+            - Maakt scherm NIET zwart
+            - Gebruikt opgegeven X,Y als offset
+            - Ideaal voor UI elementen (knoppen, achtergrond)
+  Gebruik:  Audio player achtergrond en knoppen.
+
+  8.6 showImageFromSD(const char *filename, bool centerX, bool centerY)
+  ----------------------------------------------------------------------
+  Doel:     Automatische format detectie en weergave.
+  Werking:  Bepaalt formaat op basis van extensie en roept de
+            juiste functie aan:
+            .jpg/.jpeg -> showJpegFromSD()
+            .png       -> showPngFromSD()
+            .gif       -> showGifFromSD()
+            .bmp       -> showBmpFromSD()
+            .pcx       -> Foutmelding (niet ondersteund)
+
+  8.7 showBmpFromSD(const char *filename, bool centerX, bool centerY)
+  --------------------------------------------------------------------
+  Doel:     Toont een BMP afbeelding van SD kaart.
+  Werking:  Leest BMP header (54 bytes), valideert signature ('BM').
+            Alleen 24-bit BMP ondersteund.
+            Tekent bottom-up (BMP standaard) pixel voor pixel.
+            Converteert RGB888 naar RGB565 voor display.
+  Beperking: Langzaam door pixel-voor-pixel rendering.
+
+  8.8 showGifFromSD(const char *filename, bool centerX, bool centerY)
+  --------------------------------------------------------------------
+  Doel:     Placeholder voor GIF weergave.
+  Werking:  Gebruikt Arduino_Canvas (offscreen framebuffer) om
+            "GIF" tekst, bestandsnaam en melding "Animatie niet
+            ondersteund" te renderen. Canvas->flush() stuurt het
+            resultaat via draw16bitRGBBitmap() naar het display.
+  Status:   Alleen placeholder, animatie nog niet geimplementeerd.
+
+  8.9 freeTextLines()
+  --------------------
+  Doel:     Geeft het geheugen vrij van geladen tekstregels.
+  Werking:  Verwijdert textFileLines[] array (delete[]).
+            Reset alle tekst scroll variabelen:
+            textTotalLines, textScrollLine, textScrollCol, textMaxCol.
+  Wanneer:  Bij exitFileViewer() en bij laden nieuw tekstbestand.
+
+  8.10 renderTextPage()
+  ----------------------
+  Doel:     Rendert de huidige pagina van het geladen tekstbestand.
+  Werking:  Gebruikt Arduino_Canvas (offscreen framebuffer):
+            1. Berekent zichtbare regels (textLinesPerPage)
+            2. Begrenst textScrollLine en textScrollCol
+            3. Tekent header (bestandsnaam in cyaan, scheidingslijn)
+            4. Tekent tekstregels met horizontale offset (textScrollCol)
+            5. Tekent footer met pagina-info en scroll indicatoren:
+               - ^ v (geel): verticale scroll beschikbaar
+               - < > (cyaan): horizontale scroll beschikbaar
+            6. canvas->flush() stuurt resultaat naar display
+  Font:     setTextSize(2) = 10x14 pixels per karakter
+  Layout:   Header 40px, content area, footer 28px
+
+  8.11 showTextFromSD(const char *filename)
+  ------------------------------------------
+  Doel:     Laadt een tekstbestand in geheugen en toont eerste pagina.
+  Werking:  1. freeTextLines() - wis vorige data
+            2. Open bestand van SD-kaart
+            3. Lees alle regels in textFileLines[] array (PSRAM)
+               - Max 500 regels (TEXT_MAX_LINES)
+               - Max 200 karakters per regel (TEXT_MAX_LINE_LEN)
+            4. Bereken textMaxCol (langste regel)
+            5. Reset scroll posities naar 0
+            6. Roep renderTextPage() aan voor weergave
+  Scroll:   Na laden kan gebruiker verticaal en horizontaal scrollen
+            via swipe gestures in handleViewerTouch().
+
+
+9. AUDIO PLAYER FUNCTIES
+================================================================================
+
+  9.1 es8311WriteReg(uint8_t reg, uint8_t val)
+  es8311ReadReg(uint8_t reg)
+  -----------------------------------------------
+  Doel:     I2C register schrijven/lezen voor ES8311 codec.
+  Werking:  Standaard I2C transmissie naar adres 0x18.
+
+  9.2 initES8311()
+  -----------------
+  Doel:     Complete initialisatie van de ES8311 audio codec.
+  Werking:  7-staps proces:
+            1. Software reset
+            2. Clock configuratie (MCLK extern)
+            3. I2S format (standaard I2S, 16-bit)
+            4. Power up (referentie + analoog + IBIAS)
+            5. ADC configuratie (microfoon)
+            6. DAC configuratie (unmute, max volume)
+            7. Output configuratie (+24dB gain, speaker enable)
+  Verif.:   Leest registers terug en print naar Serial.
+
+  9.3 initAudio()
+  -----------------
+  Doel:     Initialiseert het complete audio subsysteem.
+  Werking:  1. PA_CTRL -> LOW (versterker uit bij boot)
+            2. Start MCLK via LEDC (11.29 MHz op GPIO16)
+            3. Initialiseer ES8311 codec
+            4. Configureer I2S pinnen
+            5. Stel standaard volume in (21/21 = max)
+  Returns:  true als audio beschikbaar.
+
+  9.4 setAudioVolume(uint8_t volume)
+  ------------------------------------
+  Doel:     Stelt audio volume in.
+  Werking:  Beperkt tot 0-21 range, roept audio.setVolume() aan.
+
+  9.5 startAudioPlayback(const char *filename)
+  -----------------------------------------------
+  Doel:     Start audio afspelen van SD kaart.
+  Werking:  1. Stop eventuele huidige playback
+            2. PA_CTRL -> HIGH (versterker aan)
+            3. Wacht 100ms (stabilisatie)
+            4. audio.connecttoFS(SD, filename)
+            5. audioPlaying = true
+  Fout:     Als bestand niet gevonden of connecttoFS faalt:
+            PA_CTRL -> LOW, audioPlaying = false.
+
+  9.6 stopAudioPlayback()
+  -------------------------
+  Doel:     Stopt audio playback.
+  Werking:  audio.stopSong(), PA_CTRL -> LOW.
+            Reset audioPlaying en audioPaused.
+
+  9.7 toggleAudioPlayback()
+  ---------------------------
+  Doel:     Schakelt tussen pauze en afspelen.
+  Werking:  audio.pauseResume(), toggle audioPaused.
+            Hertekent play/pause knop.
+
+  9.8 audioLoop()
+  ----------------
+  Doel:     Moet elke loop() iteratie aangeroepen worden.
+  Werking:  Roept audio.loop() aan als audio actief.
+            Dit houdt de audio streaming gaande.
+
+  9.9 showAudioPlayer(const char *filename)
+  -------------------------------------------
+  Doel:     Toont de volledige audio player interface.
+  Werking:  7 stappen:
+            1. Achtergrond PNG laden (BG_Watch_Audio.png)
+            2. Song titel (bestandsnaam zonder extensie)
+            3. "NOW PLAYING" subtitel
+            4. Control knoppen (PNG images van SD)
+            5. Volume balk
+            6. Help tekst
+            7. Start audio playback
+  Timing:   Meerdere registerActivity() calls om display dimming
+            te voorkomen tijdens het laden van PNG bestanden.
+
+  9.10 drawControlButtons(bool isPlaying)
+  -----------------------------------------
+  Doel:     Tekent de 4 audio control knoppen.
+  Werking:  Laadt PNG images van SD kaart:
+            - /images/button_prev_75.png
+            - /images/button_play_75.png OF button_pause_75.png
+            - /images/button_next_75.png
+            - /images/button_repeat_75.png
+  Fallback: Als PNG niet gevonden: tekent gekleurde cirkels.
+  Layout:   4 knoppen op een rij, y=360, stap=90px, start x=32.
+
+  9.11 drawVolumeBar(uint8_t volume)
+  ------------------------------------
+  Doel:     Tekent de volume balk.
+  Werking:  Achtergrond balk (donkergrijs) + gevulde deel (groen).
+            "-" links en "+" rechts van de balk.
+            Volume percentage tekst eronder.
+  Positie:  y=450, breedte=260, gecentreerd.
+  Range:    0-21 (audio library range).
+
+  9.12 handleAudioTap(int16_t x, int16_t y)
+  -------------------------------------------
+  Doel:     Verwerkt tap op audio player knoppen.
+  Werking:  Controleert of (x,y) binnen een van de knop-gebieden valt.
+            Knoppen:
+            - Vorige (x=22..117, y=350..445): showPrevFile()
+            - Play/Pause (x=112..207): toggleAudioPlayback()
+            - Volgende (x=202..297): showNextFile()
+            - Herhaal (x=292..387): herstart huidige nummer
+            Volume:
+            - "-" (x=35..75, y=440..475): volume - 1
+            - "+" (x=335..385, y=440..475): volume + 1
+  Marge:    10px extra rondom elke knop (hitMargin).
+
+
+10. BESTANDSBROWSER FUNCTIES
+================================================================================
+
+  10.1 getFileTypeEnum(const char *filename)
+  -------------------------------------------
+  Doel:     Bepaalt FileType enum op basis van extensie.
+  Returns:  FILE_TYPE_IMAGE, FILE_TYPE_TEXT, FILE_TYPE_AUDIO,
+            of FILE_TYPE_NONE.
+
+  10.2 buildFileListByType(FileType targetType)
+  -----------------------------------------------
+  Doel:     Bouwt array van bestanden van hetzelfde type.
+  Werking:  Doorloopt currentDirectory, voegt bestanden met
+            matching type toe aan fileList[] array (max 64).
+            Vindt huidige bestand in lijst (currentFileIndex).
+
+  10.3 populateFileList()
+  ------------------------
+  Doel:     Vult de LVGL bestandenlijst met items.
+  Werking:  3 fasen:
+            1. ".." knop (als niet in root)
+            2. Subdirectories (blauw, map icoon)
+            3. Bestanden (kleur per type, juist icoon)
+  Stijl:    Montserrat 18pt font, donkere achtergrond, 12px padding.
+  Memory:   Bestandspaden worden gekopieerd met malloc() en
+            opgeslagen als user data op de LVGL button.
+
+  10.4 ui_event_file_clicked(lv_event_t *e)
+  -------------------------------------------
+  Doel:     Event handler wanneer gebruiker op bestand tikt.
+  Werking:  Haalt bestandspad op uit button user data.
+            Bepaalt type, bouwt navigatielijst.
+            Zet pendingViewerOpen = true voor uitgestelde rendering.
+  KRITIEK:  Tekent NIET direct! Rendering wordt uitgesteld tot na
+            lv_timer_handler() in de main loop.
+
+  10.5 ui_event_folder_clicked(lv_event_t *e)
+  ---------------------------------------------
+  Doel:     Event handler voor folder navigatie.
+  Werking:  Haalt folder pad op, roept navigateToFolder() aan.
+
+  10.6 navigateToFolder(const char *folderPath)
+  -----------------------------------------------
+  Doel:     Navigeert naar opgegeven folder.
+  Werking:  Update currentDirectory, roept populateFileList() aan.
+
+  10.7 exitFileViewer()
+  ----------------------
+  Doel:     Verlaat viewer modus, terug naar bestandenscherm.
+  Werking:  Stopt audio, roept freeTextLines() aan om tekst
+            geheugen vrij te geven, reset ALLE touch state
+            variabelen, laadt ui_ScreenFiles, forceert
+            lv_timer_handler().
+  KRITIEK:  Wist FT3168->IIC_Interrupt_Flag om ghost touches
+            te voorkomen.
+
+  10.8 handleViewerTouch()
+  -------------------------
+  Doel:     Verwerkt touch input in viewer modus.
+  Werking:  4-fasen systeem (zie sectie 6 in Software Architectuur).
+            Swipe gedrag verschilt per viewer type:
+            - Tekst: verticaal = scroll regels (half pagina),
+                     horizontaal = scroll kolommen (10 chars)
+            - Afbeelding: verticaal = volgend/vorig bestand
+            - Audio: horizontaal = volume (+/- 3 stappen)
+
+  10.9 showNextFile() / showPrevFile()
+  --------------------------------------
+  Doel:     Toont volgende/vorige bestand van hetzelfde type.
+  Werking:  Update currentFileIndex (cyclisch), laadt bestand.
+            Reset touch debounce timer na laden.
+
+
+11. TOUCH INITIALISATIE
+================================================================================
+
+  11.1 initTouch()
+  -----------------
+  Doel:     Initialiseert FT3168 capacitieve touch controller.
+  Werking:  FT3168->begin() zoekt device op I2C bus.
+            Configureert TOUCH_POWER_MONITOR modus voor laag
+            stroomverbruik met interrupt-based wake.
+  Returns:  true als FT3168 gevonden.
+
+
+12. AUDIO LIBRARY CALLBACKS
+================================================================================
+
+  12.1 audio_info(const char *info)
+  ----------------------------------
+  Doel:     Debug callback van ESP32-audioI2S library.
+  Werking:  Print info naar Serial met "[Audio-Lib]" prefix.
+
+  12.2 audio_error(const char *info)
+  -----------------------------------
+  Doel:     Error callback.
+  Werking:  Print fout naar Serial.
+
+  12.3 audio_eof_mp3(const char *info)
+  --------------------------------------
+  Doel:     Callback wanneer audio bestand volledig afgespeeld is.
+  Werking:  Zet audioPlaying = false, PA_CTRL -> LOW.
+
+  12.4 audio_id3data(const char *info)
+  --------------------------------------
+  Doel:     Callback voor ID3 metadata (MP3 tags).
+  Werking:  Print metadata naar Serial.
+
+
+================================================================================
+  Einde document: 04 - FUNCTIEBESCHRIJVINGEN
+================================================================================

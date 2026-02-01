@@ -1,0 +1,142 @@
+================================================================================
+  01 - PROJECT OVERZICHT
+  ESP32-S3 Smartwatch met AMOLED Display
+================================================================================
+  Versie:     2.3.1
+  Datum:      1 februari 2026
+  Auteur:     JWP van Renen
+  Platform:   Arduino IDE / ESP32 Arduino Core
+================================================================================
+
+
+1. WAT IS DIT PROJECT?
+================================================================================
+
+Dit project is een volledig functionele smartwatch-applicatie gebouwd op de
+Waveshare ESP32-S3 Touch AMOLED 2.06" module. Het combineert een grafische
+gebruikersinterface (LVGL) met directe display-aansturing (Arduino_GFX) voor
+een rijke multimedia-ervaring op een klein AMOLED-scherm.
+
+De smartwatch biedt:
+  - Digitale klok met NTP-tijdsynchronisatie
+  - Stappenteller met accelerometer
+  - Systeeminstellingen (helderheid, batterij, WiFi)
+  - Bestandsbrowser met SD-kaart ondersteuning
+  - Multimedia viewer (afbeeldingen, audio, tekst)
+  - Energiebesparing met automatisch dimmen en slapen
+
+
+2. HARDWARE PLATFORM
+================================================================================
+
+  Component               Specificatie
+  ----------------------- --------------------------------------------------
+  Microcontroller         ESP32-S3 (QFN56), Dual-core LX7 @ 240MHz
+  Flash geheugen          16 MB (QIO modus)
+  PSRAM                   8 MB (OPI modus)
+  Display                 CO5300 AMOLED, 410x502 pixels, 16-bit RGB565
+  Display interface       QSPI (Quad SPI)
+  Touch controller        FT3168, capacitief, I2C @ 0x38
+  Power Management        AXP2101 PMIC, Li-Ion/Li-Po lader
+  Audio Codec             ES8311 (DAC/ADC), I2C @ 0x18
+  Audio ADC               ES7210 (microfoon input)
+  Power Amplifier         Extern, bestuurd via GPIO46 (PA_CTRL)
+  IMU / Accelerometer     QMI8658 (6-axis: accelerometer + gyroscoop)
+  SD-kaart                MicroSD via SPI (HSPI bus)
+  Draadloos               WiFi 802.11 b/g/n + Bluetooth 5.0 LE
+  USB                     USB-Serial/JTAG (CDC modus)
+
+
+3. SCHERMEN EN NAVIGATIE
+================================================================================
+
+De applicatie heeft 4 hoofdschermen plus een viewer-scherm:
+
+  Scherm 0: KLOK          Tijd, datum, dagnaam (Nederlands)
+  Scherm 1: STAPPEN       Stappenteller met pauze/reset
+  Scherm 2: INSTELLINGEN  Helderheid, batterij, WiFi status
+  Scherm 3: BESTANDEN     SD-kaart bestandsbrowser
+  Viewer:   VIEWER        Overlay voor afbeeldingen/audio/tekst
+
+Navigatie:
+  - Swipe naar links:   Volgend scherm (0 -> 1 -> 2 -> 3 -> 0)
+  - Swipe naar rechts:  Vorig scherm (0 -> 3 -> 2 -> 1 -> 0)
+  - Tik op bestand:     Open in viewer
+  - 3 sec drukken:      Terug vanuit viewer
+
+
+4. ENERGIEBESPARING
+================================================================================
+
+Drie fasen van energiebesparing:
+
+  Fase        Trigger               Helderheid    Updates
+  ----------- --------------------- ------------- ---------------------
+  ACTIEF      Na elke touch         200/255       Alles actief
+  GEDIMD      15 sec inactiviteit   50/255        Alles actief
+  SLAAP       30 sec inactiviteit   0/255         Updates gepauzeerd
+
+Elke touch-interactie reset de timer en wekt het display onmiddellijk.
+
+
+5. ONDERSTEUNDE BESTANDSTYPEN
+================================================================================
+
+  Type          Extensies              Viewer           Kleur in browser
+  ------------- ---------------------- ---------------- -----------------
+  Afbeelding    JPG, JPEG, PNG,        Volledig scherm  Groen
+                GIF, BMP, PCX
+  Audio         MP3, WAV, OGG, FLAC    Audio player     Oranje
+  Tekst         TXT, LOG, CSV          Tekst viewer     Lichtblauw
+  Map           (directory)            Browser          Blauw
+
+
+6. PROJECTSTRUCTUUR
+================================================================================
+
+  ESP32_S3_Smartwatch/
+  |
+  |-- ESP32_S3_Smartwatch.ino    Hoofdprogramma (5504 regels, 205 KB)
+  |-- pin_config.h               GPIO pin definities
+  |-- wifi_config.h              WiFi en NTP instellingen
+  |
+  |-- ui.h / ui.cpp              LVGL UI definities (SquareLine Studio)
+  |-- ui_events.h / .cpp         UI event handlers
+  |-- ui_helpers.h / .cpp        UI helper functies
+  |-- ui_ScreenClock.cpp         Klokscherm layout
+  |-- ui_ScreenSteps.cpp         Stappenscherm layout
+  |-- ui_ScreenSettings.cpp      Instellingenscherm layout
+  |-- ui_ScreenFiles.cpp         Bestandenscherm layout
+  |
+  |-- images/                    PNG/JPEG bestanden voor SD-kaart
+  |   |-- BG_Watch_Audio.png     Audio player achtergrond (410x502)
+  |   |-- button_play_75.png     Play knop (75x75)
+  |   |-- button_pause_75.png    Pauze knop (75x75)
+  |   |-- button_prev_75.png     Vorige knop (75x75)
+  |   |-- button_next_75.png     Volgende knop (75x75)
+  |   |-- button_repeat_75.png   Herhaal knop (75x75)
+  |
+  |-- libraries/                 Vereiste third-party libraries
+  |-- documentatie/              Deze documentatie
+
+
+7. VERSIEGESCHIEDENIS
+================================================================================
+
+  Versie  Datum           Wijzigingen
+  ------- --------------- -----------------------------------------------
+  2.0.0   jan 2026        Eerste werkende versie met LVGL en bestandsbrowser
+  2.2.0   jan 2026        Fix LVGL rendering conflict bij viewer opening
+  2.2.1   jan 2026        Fix PNG endianness (BIG -> LITTLE_ENDIAN)
+  2.2.2   jan 2026        Diagnostiek voor PNG rendering probleem
+  2.3.0   31 jan 2026     PSRAM buffer voor PNG (CO5300 QSPI fix),
+                           audio player met PNG knoppen, volume control
+  2.3.1   1 feb 2026      Arduino_Canvas voor tekst/GIF/error viewer,
+                           tekst viewer met verticaal en horizontaal
+                           scrollen, grotere font, geheugen-gebaseerde
+                           regelopslag (tot 500 regels, 200 chars/regel)
+
+
+================================================================================
+  Einde document: 01 - PROJECT OVERZICHT
+================================================================================

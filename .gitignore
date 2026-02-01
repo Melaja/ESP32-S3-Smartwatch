@@ -1,0 +1,22 @@
+# WiFi credentials - never commit this file
+wifi_config.h
+
+# Third-party libraries (install separately, see README.md)
+libraries/
+
+# Arduino IDE build artifacts
+build/
+*.elf
+*.bin
+*.map
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE files
+.vscode/
+*.swp
+*.swo
+*~

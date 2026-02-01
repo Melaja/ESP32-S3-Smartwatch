@@ -1,0 +1,306 @@
+================================================================================
+  06 - INSTALLATIE EN COMPILATIE HANDLEIDING
+  Stap-voor-stap instructies voor compilatie en upload
+================================================================================
+  Versie:     2.3.1
+  Datum:      1 februari 2026
+  Auteur:     JWP van Renen
+================================================================================
+
+
+1. VEREISTEN
+================================================================================
+
+  Software:
+  - Arduino IDE 2.x (of 1.8.x)
+  - ESP32 Arduino Core (via Board Manager)
+  - USB driver voor ESP32-S3 (CH340 of native USB CDC)
+
+  Hardware:
+  - Waveshare ESP32-S3 Touch AMOLED 2.06"
+  - USB-C kabel (data, niet alleen laden)
+  - MicroSD kaart (optioneel, voor bestanden/audio)
+  - Computer met Windows/Mac/Linux
+
+
+2. STAP 1: ARDUINO IDE INSTALLEREN
+================================================================================
+
+  2.1 Download Arduino IDE:
+      https://www.arduino.cc/en/software
+
+  2.2 Installeer ESP32 Board Support:
+      a) Open Arduino IDE
+      b) Ga naar File > Preferences
+      c) Bij "Additional Board Manager URLs" voeg toe:
+         https://espressif.github.io/arduino-esp32/package_esp32_index.json
+      d) Ga naar Tools > Board > Board Manager
+      e) Zoek "esp32" en installeer "esp32 by Espressif Systems"
+
+
+3. STAP 2: LIBRARIES INSTALLEREN
+================================================================================
+
+  Er zijn twee methoden:
+
+  === METHODE A: Vanuit de export folder (aanbevolen) ===
+
+  1. Kopieer ALLE folders uit:
+     c:\export\smartwatch\ESP32_S3_Smartwatch\libraries\
+     naar je Arduino libraries folder:
+     C:\Users\<gebruiker>\Documents\Arduino\libraries\
+
+  2. Kopieer ook lv_conf.h naar:
+     C:\Users\<gebruiker>\Documents\Arduino\libraries\lv_conf.h
+
+  Na kopiering zou je libraries folder er zo uit moeten zien:
+
+     Arduino/libraries/
+     |-- lv_conf.h              <-- KRITIEK: moet NAAST lvgl/ staan
+     |-- lvgl/
+     |-- GFX_Library_for_Arduino/
+     |-- Arduino_DriveBus/
+     |-- XPowersLib/
+     |-- ESP32-audioI2S-master/
+     |-- AnimatedGIF/
+     |-- PNGdec/
+     |-- TJpg_Decoder/
+
+
+  === METHODE B: Via Arduino Library Manager + handmatig ===
+
+  Via Library Manager (Sketch > Include Library > Manage Libraries):
+  - lvgl versie 9.3.0
+  - GFX Library for Arduino versie 1.6.4
+  - XPowersLib versie 0.3.2
+  - AnimatedGIF versie 2.2.0
+  - PNGdec versie 1.1.6
+  - TJpg_Decoder versie 1.1.0
+
+  Handmatig installeren (niet in Library Manager):
+  - Arduino_DriveBus (v1.0.1) - van Waveshare SDK
+  - ESP32-audioI2S-master (v3.4.4) - van GitHub
+
+  BELANGRIJK: Bij methode B moet je lv_conf.h handmatig kopieren
+  naar de Arduino/libraries/ folder!
+
+
+4. STAP 3: BOARD INSTELLINGEN
+================================================================================
+
+  Ga naar Tools menu en stel in:
+
+  Instelling                  Waarde
+  --------------------------- -------------------------------------------
+  Board                       ESP32S3 Dev Module
+  USB CDC On Boot              Enabled (*)
+  USB DFU On Boot              Disabled
+  Flash Mode                   QIO 80MHz
+  Flash Size                   16MB (128Mb)
+  Partition Scheme              app3M_fat9M_16MB (**)
+  PSRAM                        OPI PSRAM
+  CPU Frequency                240MHz (WiFi)
+  Upload Speed                 921600
+  USB Mode                     Hardware CDC and JTAG
+
+  (*) USB CDC On Boot = Enabled is KRITIEK!
+      Zonder dit zie je geen Serial.println() output.
+
+  (**) Als app3M_fat9M_16MB niet beschikbaar is, kies:
+       "Huge APP (3MB No OTA/1MB SPIFFS)" of
+       "Default 16MB with spiffs"
+
+  FQBN (voor arduino-cli):
+  esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,
+  PartitionScheme=app3M_fat9M_16MB,PSRAM=opi
+
+
+5. STAP 4: PROJECT OPENEN
+================================================================================
+
+  1. Open Arduino IDE
+  2. File > Open
+  3. Navigeer naar:
+     c:\export\smartwatch\ESP32_S3_Smartwatch\ESP32_S3_Smartwatch.ino
+  4. Arduino IDE opent automatisch alle bijbehorende bestanden
+     (.h, .cpp) in tabbladen
+
+  Je zou de volgende tabbladen moeten zien:
+  - ESP32_S3_Smartwatch
+  - pin_config.h
+  - wifi_config.h
+  - ui.h / ui.cpp
+  - ui_events.h / ui_events.cpp
+  - ui_helpers.h / ui_helpers.cpp
+  - ui_ScreenClock / Steps / Settings / Files
+
+
+6. STAP 5: WIFI CONFIGURATIE AANPASSEN
+================================================================================
+
+  Open wifi_config.h en pas aan:
+
+    const char *WIFI_SSID     = "JouwNetwerk";
+    const char *WIFI_PASSWORD = "JouwWachtwoord";
+    const char *NTP_SERVER    = "pool.ntp.org";     // of nl.pool.ntp.org
+    const char *TZ_INFO       = "CET-1CEST,M3.5.0,M10.5.0/3";
+
+  Tijdzone voorbeelden:
+  - Nederland/Belgie:  "CET-1CEST,M3.5.0,M10.5.0/3"
+  - UK:                "GMT0BST,M3.5.0/1,M10.5.0"
+  - US Eastern:        "EST5EDT,M3.2.0,M11.1.0"
+  - US Pacific:        "PST8PDT,M3.2.0,M11.1.0"
+
+
+7. STAP 6: COMPILEREN
+================================================================================
+
+  1. Klik op het vinkje (Verify) of Ctrl+R
+  2. Wacht op compilatie (~1-2 minuten bij eerste keer)
+  3. Controleer onderaan op fouten
+
+  Verwachte output:
+    Sketch uses XXXXX bytes (XX%) of program storage space.
+    Global variables use XXXXX bytes (XX%) of dynamic memory.
+
+  Verwachte grootte: ~2.5 MB firmware
+
+  Mogelijke fouten:
+  -----------------
+  FOUT: "lvgl.h: No such file or directory"
+  OPLOSSING: lvgl library niet geinstalleerd of lv_conf.h ontbreekt.
+
+  FOUT: "Arduino_GFX_Library.h: No such file or directory"
+  OPLOSSING: GFX library niet geinstalleerd.
+
+  FOUT: "lv_conf.h: No such file or directory"
+  OPLOSSING: lv_conf.h moet NAAST de lvgl/ folder staan in libraries/.
+
+  FOUT: "Permission denied" op header files
+  OPLOSSING: Sluit andere IDE instanties, wacht even, probeer opnieuw.
+
+
+8. STAP 7: UPLOADEN
+================================================================================
+
+  1. Sluit het Waveshare board aan via USB-C
+  2. Selecteer de juiste COM-poort (Tools > Port)
+  3. Klik op de pijl (Upload) of Ctrl+U
+  4. Wacht op upload (~15-20 seconden bij 921600 baud)
+
+  Verwachte upload output:
+    Connecting...
+    Writing at 0x00010000... 100%
+    Wrote 2508992 bytes in 17.0 seconds
+    Hard resetting via RTS pin...
+
+  Als upload faalt:
+  -----------------
+  - Druk kort op de BOOT knop terwijl je upload start
+  - Controleer of de juiste COM-poort geselecteerd is
+  - Probeer een lagere Upload Speed (115200)
+  - Controleer of de USB kabel data ondersteunt (niet alleen laden)
+  - Na upload verschijnt soms een andere COM-poort (CDC poort)
+
+
+9. STAP 8: SERIAL MONITOR
+================================================================================
+
+  1. Open Serial Monitor: Tools > Serial Monitor (of Ctrl+Shift+M)
+  2. Stel baud rate in op 115200
+  3. Je zou moeten zien:
+
+    ==================================================
+    ESP32-S3 Smartwatch LVGL - Versie 2.3.1
+    Auteur: JWP van Renen
+    ==================================================
+    [I2C] Bus initialiseren...
+    [I2C] OK
+    [PMU] AXP2101 OK
+    [Display] CO5300 OK
+    [Touch] FT3168 OK
+    [IMU] QMI8658 OK
+    [SD] MicroSD kaart OK
+    [Audio] ES8311 geinitialiseerd
+    [WiFi] Verbonden met ReLo
+    [NTP] Tijd gesynchroniseerd
+    ==================================================
+    Initialisatie compleet!
+    ==================================================
+
+
+10. STAP 9: SD-KAART VOORBEREIDEN
+================================================================================
+
+  Voor de audio player en afbeelding viewer:
+
+  1. Formatteer MicroSD kaart als FAT32
+  2. Maak een /images/ folder aan
+  3. Kopieer de volgende bestanden naar /images/:
+     - BG_Watch_Audio.png
+     - button_play_75.png
+     - button_pause_75.png
+     - button_prev_75.png
+     - button_next_75.png
+     - button_repeat_75.png
+
+  4. Optioneel: voeg eigen bestanden toe:
+     - Muziek: MP3, WAV, OGG of FLAC bestanden
+     - Foto's: JPG of PNG bestanden
+     - Tekst: TXT bestanden
+
+
+11. COMPILATIE VIA COMMAND LINE (arduino-cli)
+================================================================================
+
+  Als alternatief voor de IDE kun je arduino-cli gebruiken:
+
+  Pad naar arduino-cli (bij Arduino IDE installatie):
+  "C:\Program Files\Arduino IDE\resources\app\lib\backend\resources\arduino-cli.exe"
+
+  Compileren:
+  arduino-cli compile --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi "c:\export\smartwatch\ESP32_S3_Smartwatch"
+
+  Uploaden:
+  arduino-cli upload -p COM12 --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashMode=qio,FlashSize=16M,PartitionScheme=app3M_fat9M_16MB,PSRAM=opi "c:\export\smartwatch\ESP32_S3_Smartwatch"
+
+
+12. TROUBLESHOOTING
+================================================================================
+
+  Probleem: Display blijft zwart
+  Oplossing: Controleer QSPI pinnen in pin_config.h.
+             Controleer of gfx->begin() succesvol is in Serial Monitor.
+
+  Probleem: Touch werkt niet
+  Oplossing: Controleer I2C verbinding.
+             FT3168 moet reageren op adres 0x38.
+
+  Probleem: Geen geluid
+  Oplossing: Check ES8311 op I2C (adres 0x18).
+             Check PA_CTRL pin (GPIO46).
+             Check of MCLK actief is (GPIO16, 11.29 MHz).
+             Controleer SD-kaart met audiobestanden.
+
+  Probleem: PNG afbeeldingen niet zichtbaar
+  Oplossing: Dit is opgelost in v2.3.0 met PSRAM buffering.
+             Controleer of PSRAM correct geconfigureerd is (OPI PSRAM).
+             Check Serial Monitor voor "[IMG]" berichten.
+
+  Probleem: "Guru Meditation Error" crash
+  Oplossing: Meestal geheugen gerelateerd.
+             Check PSRAM beschikbaarheid met ESP.getFreePsram().
+             Verklein LVGL buffer als PSRAM niet beschikbaar.
+
+  Probleem: WiFi verbindt niet
+  Oplossing: Controleer SSID en wachtwoord in wifi_config.h.
+             WiFi werkt alleen op 2.4 GHz (niet 5 GHz).
+
+  Probleem: Tijd klopt niet
+  Oplossing: Controleer tijdzone instelling in wifi_config.h.
+             NTP vereist werkende WiFi verbinding.
+
+
+================================================================================
+  Einde document: 06 - INSTALLATIE EN COMPILATIE HANDLEIDING
+================================================================================

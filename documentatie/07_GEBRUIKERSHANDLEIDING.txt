@@ -1,0 +1,299 @@
+================================================================================
+  07 - GEBRUIKERSHANDLEIDING
+  Hoe de smartwatch te bedienen
+================================================================================
+  Versie:     2.3.1
+  Datum:      1 februari 2026
+  Auteur:     JWP van Renen
+================================================================================
+
+
+1. EERSTE GEBRUIK
+================================================================================
+
+Na het uploaden van de firmware:
+
+  1. Het display toont eerst een kort welkomstscherm
+  2. De klok verschijnt als eerste scherm
+  3. Als WiFi geconfigureerd is, wordt de tijd automatisch
+     gesynchroniseerd via internet (NTP)
+  4. De smartwatch is nu klaar voor gebruik
+
+
+2. SCHERMEN WISSELEN
+================================================================================
+
+De smartwatch heeft 4 schermen. Wissel met horizontale swipes:
+
+  SWIPE NAAR LINKS  -->  Volgend scherm
+  SWIPE NAAR RECHTS <--  Vorig scherm
+
+  Volgorde: Klok -> Stappen -> Instellingen -> Bestanden -> Klok ...
+
+  Tips:
+  - Swipe minimaal 50 pixels
+  - Swipe meer horizontaal dan verticaal
+  - De schermen schuiven met een vloeiende animatie (300ms)
+
+
+3. SCHERM 1: KLOK
+================================================================================
+
+  Weergave:
+  ---------
+  - Grote digitale tijd: bijv. "14:35"
+  - Seconden apart: bijv. "22"
+  - Datum: bijv. "31 Januari 2026"
+  - Dagnaam: bijv. "Vrijdag"
+
+  Tijd synchronisatie:
+  - De tijd wordt automatisch opgehaald via WiFi (NTP)
+  - Tijdzone: Europa/Brussel (automatische zomer/wintertijd)
+  - Bij geen WiFi: tijd begint bij 00:00 en loopt vanaf boot
+
+  Acties: Geen speciale acties op dit scherm.
+  Swipe links/rechts om van scherm te wisselen.
+
+
+4. SCHERM 2: STAPPENTELLER
+================================================================================
+
+  Weergave:
+  ---------
+  - Titel: "Stappen"
+  - Aantal stappen: bijv. "1.234"
+  - Status: "Actief" of "Gepauzeerd"
+
+  Acties:
+  -------
+  - KORTE TIK:    Pauzeer of hervat het tellen van stappen
+  - LANG DRUKKEN:  Reset stappenteller naar 0 (>1 seconde)
+
+  Hoe werkt het:
+  De ingebouwde accelerometer (QMI8658) detecteert loopbewegingen.
+  Het algoritme analyseert de versnellingskracht en herkent het
+  patroon van stappen (pieken en dalen in de data).
+
+
+5. SCHERM 3: INSTELLINGEN
+================================================================================
+
+  Weergave:
+  ---------
+  - Helderheid slider (0-255)
+  - Batterij percentage met kleurcodering
+  - WiFi status
+
+  Helderheid:
+  -----------
+  Sleep de slider naar links (donkerder) of rechts (helderder).
+  De helderheid wordt direct aangepast.
+
+  Batterij kleurcodes:
+  - GROEN:  > 50% - Goed geladen
+  - GEEL:   20-50% - Matig, overweeg laden
+  - ROOD:   < 20% - Bijna leeg, laden aanbevolen
+
+  WiFi status:
+  - "Verbonden" (blauw) = WiFi actief, tijd synchronisatie werkt
+  - "Geen" (rood) = Geen WiFi verbinding
+
+
+6. SCHERM 4: BESTANDSBROWSER
+================================================================================
+
+  Weergave:
+  ---------
+  - SD-kaart status (grootte, huidige map)
+  - Bestandenlijst met iconen en kleuren
+  - Instructie tekst onderaan
+
+  Iconen en kleuren:
+  - MAP icoon (blauw):     Submappen
+  - AFBEELDING icoon (groen): JPG, PNG, GIF, BMP bestanden
+  - AUDIO icoon (oranje):  MP3, WAV, OGG, FLAC bestanden
+  - BESTAND icoon (lichtblauw): TXT, LOG, CSV bestanden
+  - ".." (geel):           Terug naar bovenliggende map
+
+  Acties:
+  -------
+  - SCROLL:        Blader door de lijst (veeg omhoog/omlaag)
+  - TIK op map:    Open de map
+  - TIK op "..":   Ga terug naar bovenliggende map
+  - TIK op bestand: Open het bestand (na ~1 seconde)
+
+
+7. AFBEELDING VIEWER
+================================================================================
+
+  Wanneer je een afbeelding opent vanuit de bestandsbrowser:
+
+  Ondersteunde formaten:
+  - JPG / JPEG: Baseline JPEG (niet Progressive)
+  - PNG: Alle varianten (palette, true-color, alpha)
+  - BMP: 24-bit bitmap
+  - GIF: Placeholder (animatie niet ondersteund)
+
+  Acties in de viewer:
+  --------------------
+  - SWIPE OMHOOG:    Volgende afbeelding in de map
+  - SWIPE OMLAAG:    Vorige afbeelding in de map
+  - LANG DRUKKEN:    Terug naar bestandsbrowser (3 seconden)
+
+  Noot: Na het openen is er een korte wachttijd (~2 seconden)
+  voordat touch wordt geaccepteerd. Dit voorkomt onbedoelde acties.
+
+
+8. AUDIO PLAYER
+================================================================================
+
+  Wanneer je een audiobestand opent vanuit de bestandsbrowser:
+
+  Ondersteunde formaten:
+  - MP3 (meest gebruikt)
+  - WAV (ongecomprimeerd)
+  - OGG (Ogg Vorbis)
+  - FLAC (lossless)
+
+  Weergave:
+  ---------
+  - Achtergrond afbeelding (als PNG op SD-kaart aanwezig)
+  - Song titel (bestandsnaam)
+  - "NOW PLAYING" subtitel
+  - 4 knoppen: Vorige | Play/Pause | Volgende | Herhaal
+  - Volume balk met -/+ knoppen
+  - Help tekst onderaan
+
+  Knop functies:
+  ---------------
+  - VORIGE (<<):     Speel het vorige audiobestand
+  - PLAY/PAUSE:      Pauzeer of hervat afspelen
+  - VOLGENDE (>>):   Speel het volgende audiobestand
+  - HERHAAL:         Herstart het huidige nummer
+
+  Volume regeling:
+  ----------------
+  - TIK op "-":           Volume 1 stap omlaag
+  - TIK op "+":           Volume 1 stap omhoog
+  - SWIPE NAAR RECHTS:    Volume 3 stappen omhoog
+  - SWIPE NAAR LINKS:     Volume 3 stappen omlaag
+
+  Volume bereik: 0 (stil) tot 21 (maximaal)
+  Percentage wordt onder de balk getoond.
+
+  Terug naar browser:
+  - LANG DRUKKEN (3 seconden): Stopt muziek en keert terug
+
+
+9. TEKST VIEWER
+================================================================================
+
+  Wanneer je een tekstbestand opent:
+
+  Weergave:
+  ---------
+  - Bestandsnaam bovenaan (cyaan) met scheidingslijn
+  - Tekst inhoud in wit (groter lettertype, ~32 karakters per regel)
+  - Footer met pagina-informatie:
+    * Regelnummers: bijv. "Regels 1-25 van 100"
+    * Bij horizontaal scrollen: bijv. "R 1-25/100 K 11+"
+  - Scroll indicatoren:
+    * ^ v (geel): meer tekst boven/onder beschikbaar
+    * < > (cyaan): meer tekst links/rechts beschikbaar
+  - Help tekst: "Swipe: scroll | 3s druk: terug"
+
+  Acties:
+  -------
+  - SWIPE OMHOOG:    Scroll omlaag (meer tekst zien, half pagina)
+  - SWIPE OMLAAG:    Scroll omhoog (terug, half pagina)
+  - SWIPE LINKS:     Scroll naar rechts (langere regels zien, 10 chars)
+  - SWIPE RECHTS:    Scroll naar links (terug naar begin, 10 chars)
+  - LANG DRUKKEN:    Terug naar browser (3 seconden)
+
+  Capaciteit:
+  - Maximaal 500 regels per bestand
+  - Maximaal 200 karakters per regel
+  - Onbeperkt scrollen door het hele bestand
+
+
+10. ENERGIEBESPARING
+================================================================================
+
+  De smartwatch bespaart automatisch energie:
+
+  Fase 1: ACTIEF
+  - Na elke aanraking
+  - Scherm op normale helderheid (200/255)
+  - Alle functies actief
+
+  Fase 2: GEDIMD
+  - Na 15 seconden zonder aanraking
+  - Scherm wordt donkerder (50/255)
+  - Nog steeds zichtbaar
+  - Alle functies nog actief
+
+  Fase 3: SLAAPSTAND
+  - Na 30 seconden zonder aanraking
+  - Scherm volledig uit (0/255)
+  - Updates gepauzeerd
+  - Tik op het scherm om te wekken
+
+  Bij elke aanraking springt het display direct terug naar
+  volle helderheid.
+
+
+11. SD-KAART VOORBEREIDEN
+================================================================================
+
+  Formaat: FAT32
+
+  Aanbevolen mapstructuur:
+  /
+  |-- images/
+  |   |-- BG_Watch_Audio.png        (VEREIST voor audio player)
+  |   |-- button_play_75.png        (VEREIST voor audio player)
+  |   |-- button_pause_75.png       (VEREIST voor audio player)
+  |   |-- button_prev_75.png        (VEREIST voor audio player)
+  |   |-- button_next_75.png        (VEREIST voor audio player)
+  |   |-- button_repeat_75.png      (VEREIST voor audio player)
+  |
+  |-- muziek/                        (je eigen audiobestanden)
+  |   |-- liedje1.mp3
+  |   |-- liedje2.wav
+  |
+  |-- fotos/                         (je eigen afbeeldingen)
+  |   |-- vakantie.jpg
+  |   |-- portret.png
+
+  BELANGRIJK: De /images/ folder met audio player bestanden is
+  VEREIST voor de audio player. Zonder deze bestanden worden
+  eenvoudige gekleurde cirkels getoond als knoppen (fallback).
+
+
+12. TIPS EN TRUCS
+================================================================================
+
+  - De bestandsbrowser sorteert bestanden in volgorde van het
+    FAT32 bestandssysteem (meestal volgorde van aanmaak).
+
+  - Grote JPEG bestanden worden automatisch geschaald om op
+    het scherm te passen (1:1, 1:2, 1:4 of 1:8).
+
+  - Progressive JPEG bestanden worden NIET ondersteund.
+    Converteer ze naar Baseline JPEG (open in Paint en sla
+    opnieuw op als JPEG).
+
+  - De audio player speelt automatisch door naar het volgende
+    bestand in de map? Nee, na het einde stopt de playback.
+    Gebruik de >> knop of herhaal knop.
+
+  - WiFi is alleen nodig voor tijdsynchronisatie. Alle andere
+    functies (bestanden, audio, stappen) werken zonder WiFi.
+
+  - Het display wekt direct bij aanraking, zelfs vanuit de
+    diepste slaapstand.
+
+
+================================================================================
+  Einde document: 07 - GEBRUIKERSHANDLEIDING
+================================================================================
