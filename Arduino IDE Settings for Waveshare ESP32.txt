@@ -1,0 +1,28 @@
+Arduino IDE Settings for Waveshare Smart Watch ESP32S3 Touch AMOLED 2.06"
+In the IDE go to Tools/ Board/ ESP32 Arduino/ ESP32S3 Dev Module and configure:
+
+
+
+Setting                         Value / Note
+Board:                          ESP32S3 Dev Module
+USB CDC On Boot:                Enabled (otherwise no serial monitor)
+USB DFU On Boot:                Disabled
+Serial Port:                    COM12
+Flash Size:                     16 MB (depending on your Waveshare variant, usually 16 MB)
+PSRAM:                          OPI PSRAM
+Upload Speed:                   115200 or 921600 (start with 115200, faster can be used later)
+CPU Frequency:                  240 MHz
+Flash Mode:                     QIO
+Partition Scheme:               Default 16MB with spiffs (or "Huge APP" if you have a lot of LVGL code)
+Arduino Runs On:                Core 1
+Events Run On:                  Core 1
+USB Mode:                       Hardware CDC and JTAG
+Baudrate Monitor:               115200
+
+
+Extra tips:
+* Set USB CDC On Boot = Enabled, otherwise you will not see Serial.println() messages.
+* Set PSRAM = Disabled, otherwise you may get memory allocation errors.
+* Make sure the correct COM port is selected (after upload a second CDC port often appears).
+* If uploading fails: briefly press the BOOT button while starting the upload.
+
